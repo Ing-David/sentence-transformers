@@ -1,10 +1,11 @@
 from typing import Union, List
 
-class InputExample:
+
+class InputExampleDocument:
     """
     Structure for one input example with texts, the label and a unique id
     """
-    def __init__(self, guid: str = '', texts: List[str] = None,  label: Union[int, float] = 0):
+    def __init__(self, guid: str = '', document_sentences: List[str] = None, concept_labels: List[str] = None,  label: Union[int, float] = 0):
         """
         Creates one InputExample with the given texts, guid and label
         :param guid
@@ -15,8 +16,9 @@ class InputExample:
             the label for the example
         """
         self.guid = guid
-        self.texts = texts
+        self.document_sentences = document_sentences
+        self.concept_labels = concept_labels
         self.label = label
 
     def __str__(self):
-        return "<InputExample> label: {}, texts: {}".format(str(self.label), "; ".join(self.texts))
+        return "<InputExample> label: {}, document_sentences: {}, concept_labels: {}".format(str(self.label), "; ".join(self.document_sentences), "; ".join(self.concept_labels))

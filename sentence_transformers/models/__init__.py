@@ -11,3 +11,4 @@ from .WKPooling import WKPooling
 from .WeightedLayerPooling import WeightedLayerPooling
 from .WordEmbeddings import WordEmbeddings
 from .WordWeights import WordWeights
+from .RNN import RNN
