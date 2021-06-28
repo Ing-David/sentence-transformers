@@ -167,6 +167,12 @@ class DocumentCrossEncoder():
         tokenized_concept_labels['attention_mask'] = tensor_padding_concept_attention_mask
         # Score for batch
         labels = torch.tensor(labels, dtype=torch.float if self.config.num_labels == 1 else torch.long).to(self._target_device)
+        
+        for name in tokenized_document_sentences:
+            tokenized_document_sentences[name] = tokenized_document_sentences[name].to(self._target_device)
+
+        for name in tokenized_concept_labels:
+            tokenized_concept_labels[name] = tokenized_concept_labels[name].to(self._target_device)
 
         return tokenized_document_sentences, tokenized_concept_labels, labels
 
