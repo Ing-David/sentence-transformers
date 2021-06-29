@@ -2,7 +2,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer, Auto
 import numpy as np
 import logging
 import os
-from typing import Dict, Type, Callable, List
+from typing import Dict, Type, Callable, List, Iterable
 import transformers
 import torch
 from torch import nn
@@ -16,7 +16,7 @@ from collections import defaultdict
 from sentence_transformers.losses import MultipleNegativesRankingLoss
 
 logger = logging.getLogger(__name__)
-
+import GPUtil
 
 class DocumentCrossEncoder():
     def __init__(self, model_name: str, num_labels: int = None, max_length: int = None, device: str = None, tokenizer_args: Dict = {},
@@ -176,11 +176,32 @@ class DocumentCrossEncoder():
 
         return tokenized_document_sentences, tokenized_concept_labels, labels
 
+    def _sub_batching(self, sub_batch_size ,document_sentences_batch):
+        input_ids = document_sentences_batch['input_ids']
+        token_type_ids = document_sentences_batch['token_type_ids']
+        attention_mask = document_sentences_batch['attention_mask']
+        batch_list = []
+
+        for i in range(0,input_ids.shape[0], sub_batch_size):
+            start = i
+            end = i+sub_batch_size
+            batch_list.append({'input_ids': input_ids[start:end, :],
+                               'token_type_ids':token_type_ids[start:end, :],
+                               'attention_mask': attention_mask[start:end, :]})
+        remainder = input_ids.shape[0] % sub_batch_size
+        # if remainder > 0:
+        #     start = sub_batch_size *len(batch_list)
+        #     batch_list.append({'input_ids': input_ids[start:, :],
+        #                        'token_type_ids': token_type_ids[start:, :],
+        #                        'attention_mask': attention_mask[start:, :]})
+        return batch_list
+
 
     def fit(self,
             train_dataloader: DataLoader,
             evaluator: SentenceEvaluator = None,
             epochs: int = 1,
+            sub_batches = -1,
             loss_fct = None,
             activation_fct = nn.Identity(),
             scheduler: str = 'WarmupLinear',
@@ -226,6 +247,8 @@ class DocumentCrossEncoder():
             scaler = torch.cuda.amp.GradScaler()
 
         self.model_rnn.to(self._target_device)
+        self.model_transformer.to(self._target_device)
+        self.model_pooling.to(self._target_device)
 
         if output_path is not None:
             os.makedirs(output_path, exist_ok=True)
@@ -248,7 +271,7 @@ class DocumentCrossEncoder():
             scheduler = DocumentTransformer._get_scheduler(optimizer, scheduler=scheduler, warmup_steps=warmup_steps, t_total=num_train_steps)
 
         if loss_fct is None:
-            loss_fct = MultipleNegativesRankingLoss(model=self.model_rnn) if self.config.num_labels == 1 else nn.CrossEntropyLoss()
+            loss_fct = MultipleNegativesRankingLoss(model=self.model_rnn)
 
         skip_scheduler = False
 
@@ -273,8 +296,30 @@ class DocumentCrossEncoder():
                     document_sentences_batch['input_ids'] = document_sentences['input_ids'][i, :, :]
                     document_sentences_batch['token_type_ids'] = document_sentences['token_type_ids'][i, :, :]
                     document_sentences_batch['attention_mask'] = document_sentences['attention_mask'][i, :, :]
-                    # BERT process via Transformer for document
-                    document_sentences_batch_output = self.model_transformer(document_sentences_batch)
+
+                    if sub_batches > 0:
+                        # token_embeddings = features['token_embeddings']
+                        # cls_token = features['cls_token_embeddings']
+                        # attention_mask = features['attention_mask']
+                        token_embeddings = []
+                        cls_tokens = []
+                        attention_masks = []
+                        sub_batch_list = self._sub_batching(sub_batches, document_sentences_batch)
+                        for sub_batch in tqdm(sub_batch_list, desc="Processing sub-batch"):
+                            GPUtil.showUtilization()
+                            local_output = self.model_transformer(sub_batch)
+                            token_embeddings.append(local_output['token_embeddings'].cpu())
+                            cls_tokens.append(local_output['cls_token_embeddings'].cpu())
+                            attention_masks.append(local_output['attention_mask'].cpu())
+
+                        document_sentences_batch_output = {
+                            'token_embeddings' : torch.stack(token_embeddings, dim=0),
+                            'cls_token_embeddings': torch.stack(cls_tokens, dim = 0),
+                            'attention_mask': torch.stack(attention_masks, dim = 0)
+                        }
+                    else:
+                        # BERT process via Transformer for document
+                        document_sentences_batch_output = self.model_transformer(document_sentences_batch)
                     # Pooling procedure for document
                     output_pooling_document_sentences = self.model_pooling(document_sentences_batch_output)
 
