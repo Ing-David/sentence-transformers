@@ -2,10 +2,10 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer, Auto
 import numpy as np
 import logging
 import os
-from typing import Dict, Type, Callable, List, Iterable
+from typing import Dict, Type, Callable, List, Iterable, Union
 import transformers
 import torch
-from torch import nn
+from torch import nn, Tensor
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm, trange
@@ -14,13 +14,15 @@ from ..evaluation import SentenceEvaluator
 from ..models import RNN, Transformer, Pooling
 from collections import defaultdict
 from sentence_transformers.losses import MultipleNegativesRankingLoss
-
+import nltk
 logger = logging.getLogger(__name__)
 import GPUtil
 
+
 class DocumentCrossEncoder():
-    def __init__(self, model_name: str, num_labels: int = None, max_length: int = None, device: str = None, tokenizer_args: Dict = {},
-                 default_activation_function = None):
+    def __init__(self, model_name: str, num_labels: int = None, max_length: int = None, device: str = None,
+                 tokenizer_args: Dict = {},
+                 default_activation_function=None):
         """
         A CrossEncoder takes exactly two sentences / texts as input and either predicts
         a score or label for this sentence pair. It can for example predict the similarity of the sentence pair
@@ -66,9 +68,11 @@ class DocumentCrossEncoder():
             try:
                 self.config.sbert_ce_default_activation_function = util.fullname(self.default_activation_function)
             except Exception as e:
-                logger.warning("Was not able to update config about the default_activation_function: {}".format(str(e)) )
-        elif hasattr(self.config, 'sbert_ce_default_activation_function') and self.config.sbert_ce_default_activation_function is not None:
-            self.default_activation_function = util.import_from_string(self.config.sbert_ce_default_activation_function)()
+                logger.warning("Was not able to update config about the default_activation_function: {}".format(str(e)))
+        elif hasattr(self.config,
+                     'sbert_ce_default_activation_function') and self.config.sbert_ce_default_activation_function is not None:
+            self.default_activation_function = util.import_from_string(
+                self.config.sbert_ce_default_activation_function)()
         else:
             self.default_activation_function = nn.Sigmoid() if self.config.num_labels == 1 else nn.Identity()
 
@@ -121,7 +125,8 @@ class DocumentCrossEncoder():
         for a in range(len(batch)):
             # Document
             # padding sequence length for each document in order to have the same length for all phrases
-            b = self.tokenizer(batch[a].document_sentences, padding=True, truncation='longest_first', max_length=self.max_length)
+            b = self.tokenizer(batch[a].document_sentences, padding=True, truncation='longest_first',
+                               max_length=self.max_length)
             for c in b['input_ids']:
                 document_input_ids[a].append(c)
             for d in b['token_type_ids']:
@@ -130,7 +135,8 @@ class DocumentCrossEncoder():
                 document_attention_mask[a].append(e)
             # Concept's labels
             # padding sequence length for each concept's labels to have the same length in each document
-            f = self.tokenizer(batch[a].concept_labels, padding=True, truncation='longest_first', max_length=self.max_length)
+            f = self.tokenizer(batch[a].concept_labels, padding=True, truncation='longest_first',
+                               max_length=self.max_length)
             for g in f['input_ids']:
                 concept_input_ids[a].append(g)
             for h in f['token_type_ids']:
@@ -166,8 +172,9 @@ class DocumentCrossEncoder():
         tensor_padding_concept_attention_mask = torch.tensor(padding_concept_attention_mask)
         tokenized_concept_labels['attention_mask'] = tensor_padding_concept_attention_mask
         # Score for batch
-        labels = torch.tensor(labels, dtype=torch.float if self.config.num_labels == 1 else torch.long).to(self._target_device)
-        
+        labels = torch.tensor(labels, dtype=torch.float if self.config.num_labels == 1 else torch.long).to(
+            self._target_device)
+
         for name in tokenized_document_sentences:
             tokenized_document_sentences[name] = tokenized_document_sentences[name].to(self._target_device)
 
@@ -176,17 +183,17 @@ class DocumentCrossEncoder():
 
         return tokenized_document_sentences, tokenized_concept_labels, labels
 
-    def _sub_batching(self, sub_batch_size ,document_sentences_batch):
+    def _sub_batching(self, sub_batch_size, document_sentences_batch):
         input_ids = document_sentences_batch['input_ids']
         token_type_ids = document_sentences_batch['token_type_ids']
         attention_mask = document_sentences_batch['attention_mask']
         batch_list = []
 
-        for i in range(0,input_ids.shape[0], sub_batch_size):
+        for i in range(0, input_ids.shape[0], sub_batch_size):
             start = i
-            end = i+sub_batch_size
+            end = i + sub_batch_size
             batch_list.append({'input_ids': input_ids[start:end, :],
-                               'token_type_ids':token_type_ids[start:end, :],
+                               'token_type_ids': token_type_ids[start:end, :],
                                'attention_mask': attention_mask[start:end, :]})
         remainder = input_ids.shape[0] % sub_batch_size
         # if remainder > 0:
@@ -196,14 +203,13 @@ class DocumentCrossEncoder():
         #                        'attention_mask': attention_mask[start:, :]})
         return batch_list
 
-
     def fit(self,
             train_dataloader: DataLoader,
             evaluator: SentenceEvaluator = None,
             epochs: int = 1,
-            sub_batches = -1,
-            loss_fct = None,
-            activation_fct = nn.Identity(),
+            sub_batches=-1,
+            loss_fct=None,
+            activation_fct=nn.Identity(),
             scheduler: str = 'WarmupLinear',
             warmup_steps: int = 10000,
             optimizer_class: Type[Optimizer] = transformers.AdamW,
@@ -261,14 +267,16 @@ class DocumentCrossEncoder():
 
         no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
         optimizer_grouped_parameters = [
-            {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': weight_decay},
+            {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+             'weight_decay': weight_decay},
             {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
 
         optimizer = optimizer_class(optimizer_grouped_parameters, **optimizer_params)
 
         if isinstance(scheduler, str):
-            scheduler = DocumentTransformer._get_scheduler(optimizer, scheduler=scheduler, warmup_steps=warmup_steps, t_total=num_train_steps)
+            scheduler = DocumentTransformer._get_scheduler(optimizer, scheduler=scheduler, warmup_steps=warmup_steps,
+                                                           t_total=num_train_steps)
 
         if loss_fct is None:
             loss_fct = MultipleNegativesRankingLoss(model=self.model_rnn)
@@ -286,7 +294,6 @@ class DocumentCrossEncoder():
                 list_concept_labels_pooling = []
                 list_document_sentences_pooling = []
                 list_scores = []
-
 
                 for i in tqdm(range(0, len(document_sentences['input_ids'])), desc="Each document in batch"):
                     # dictionary
@@ -313,9 +320,9 @@ class DocumentCrossEncoder():
                             attention_masks.append(local_output['attention_mask'].cpu())
 
                         document_sentences_batch_output = {
-                            'token_embeddings' : torch.stack(token_embeddings, dim=0),
-                            'cls_token_embeddings': torch.stack(cls_tokens, dim = 0),
-                            'attention_mask': torch.stack(attention_masks, dim = 0)
+                            'token_embeddings': torch.stack(token_embeddings, dim=0),
+                            'cls_token_embeddings': torch.stack(cls_tokens, dim=0),
+                            'attention_mask': torch.stack(attention_masks, dim=0)
                         }
                     else:
                         # BERT process via Transformer for document
@@ -351,7 +358,8 @@ class DocumentCrossEncoder():
                 if use_amp:
                     with autocast():
 
-                        loss_value = loss_fct([output_batch_document_sentences_rnn, output_batch_concept_labels_rnn], tensor_scores)
+                        loss_value = loss_fct([output_batch_document_sentences_rnn, output_batch_concept_labels_rnn],
+                                              tensor_scores)
 
                     scale_before_step = scaler.get_scale()
                     scaler.scale(loss_value).backward()
@@ -363,7 +371,8 @@ class DocumentCrossEncoder():
                     skip_scheduler = scaler.get_scale() != scale_before_step
                 else:
 
-                    loss_value = loss_fct([output_batch_document_sentences_rnn, output_batch_concept_labels_rnn], tensor_scores)
+                    loss_value = loss_fct([output_batch_document_sentences_rnn, output_batch_concept_labels_rnn],
+                                          tensor_scores)
                     loss_value.backward()
                     torch.nn.utils.clip_grad_norm_(self.model_rnn.parameters(), max_grad_norm)
                     optimizer.step()
@@ -385,15 +394,125 @@ class DocumentCrossEncoder():
                 self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1, callback)
 
 
-    def predict(self, sentences: List[List[str]],
+    def _text_length(self, text: Union[List[int], List[List[int]]]):
+        """
+        Help function to get the length for the input text. Text can be either
+        a list of ints (which means a single text as input), or a tuple of list of ints
+        (representing several text inputs to the model).
+        """
+
+        if isinstance(text, dict):              #{key: value} case
+            return len(next(iter(text.values())))
+        elif not hasattr(text, '__len__'):      #Object has no len() method
+            return 1
+        elif len(text) == 0 or isinstance(text[0], int):    #Empty string or list of ints
+            return len(text)
+        else:
+            return sum([len(t) for t in text])
+
+    def encode(self, documents: Union[List[str], List[int]],
                batch_size: int = 32,
                show_progress_bar: bool = None,
-               num_workers: int = 0,
-               activation_fct = None,
-               apply_softmax = False,
-               convert_to_numpy: bool = True,
-               convert_to_tensor: bool = False
-               ):
+               output_value: str = 'sentence_embedding',
+               device: str = None) -> Tensor:
+        """
+        Computes document embeddings
+
+        :param documents: the documents to embed
+        :param batch_size: the batch size used for the computation
+        :param show_progress_bar: Output a progress bar when encode sentences
+        :param output_value:  Default sentence_embedding, to get sentence embeddings after Pooling.
+        :param device: Which torch.device to use for the computation
+        :return:
+           By default, a list of tensors is returned. If convert_to_tensor, a stacked tensor is returned.
+        """
+        #self.eval()
+        if show_progress_bar is None:
+            show_progress_bar = (logger.getEffectiveLevel()==logging.INFO or logger.getEffectiveLevel()==logging.DEBUG)
+
+        if device is None:
+            device = self._target_device
+
+        #self.to(device)
+
+        # Sort documents depend on their length
+        length_sorted_idx = np.argsort([-self._text_length(doc) for doc in documents])
+        # New list of documents after sorted
+        documents_sorted = [documents[idx] for idx in length_sorted_idx]
+
+        embeddings = []
+
+        for start_index in trange(0, len(documents), batch_size, desc="Batches", disable=not show_progress_bar):
+            # batch of documents
+            documents_batch = documents_sorted[start_index:start_index+batch_size]
+            # Initialisation
+            document_input_ids = [[] for _ in range(len(documents_batch))]
+            document_token_type_ids = [[] for _ in range(len(documents_batch))]
+            document_attention_mask = [[] for _ in range(len(documents_batch))]
+            tokenized_document_sentences = {}
+            # Loop through
+            for i in range(len(documents_batch)):
+                # Convert document to list of sentences
+                list_sentences = nltk.tokenize.sent_tokenize(documents_batch[i])
+                # tokenizer the list of sentences
+                a = self.tokenizer(list_sentences, padding=True, truncation='longest_first', max_length=512)
+                for b in a['input_ids']:
+                    document_input_ids[i].append(b)
+                for c in a['token_type_ids']:
+                    document_token_type_ids[i].append(c)
+                for d in a['attention_mask']:
+                    document_attention_mask[i].append(d)
+
+            # Padding Document
+            padding_document_input_ids = self.pad(document_input_ids, fill_value=0)
+            padding_document_token_type_ids = self.pad(document_token_type_ids, fill_value=0)
+            padding_document_attention_mask = self.pad(document_attention_mask, fill_value=0)
+            # Convert to torch
+            tensor_padding_document_input_ids = torch.tensor(padding_document_input_ids)
+            tokenized_document_sentences['input_ids'] = tensor_padding_document_input_ids
+            tensor_padding_document_token_type_ids = torch.tensor(padding_document_token_type_ids)
+            tokenized_document_sentences['token_type_ids'] = tensor_padding_document_token_type_ids
+            tensor_padding_document_attention_mask = torch.tensor(padding_document_attention_mask)
+            tokenized_document_sentences['attention_mask'] = tensor_padding_document_attention_mask
+            # list pooling
+            list_document_sentences_pooling = []
+
+            # embeddings' part
+            for i in tqdm(range(0, len(tokenized_document_sentences['input_ids'])), desc="Each document in batch"):
+                # dictionary
+                document_sentences_batch = {}
+                # Document
+                document_sentences_batch['input_ids'] = tokenized_document_sentences['input_ids'][i, :, :]
+                document_sentences_batch['token_type_ids'] = tokenized_document_sentences['token_type_ids'][i, :, :]
+                document_sentences_batch['attention_mask'] = tokenized_document_sentences['attention_mask'][i, :, :]
+                # BERT process via Transformer for document
+                document_sentences_batch_output = self.model_transformer(document_sentences_batch)
+                # Pooling procedure for document
+                output_pooling_document_sentences = self.model_pooling(document_sentences_batch_output)
+                if output_value:
+                    list_document_sentences_pooling.append(output_pooling_document_sentences[output_value].data)
+
+            # Combine each document in the batch to create tensor
+            combine_batch_document_sentences = torch.stack(list_document_sentences_pooling, dim=0)
+            # Put Documents and Concept's labels into RNN
+            output_batch_document_sentences_rnn = self.model_rnn(combine_batch_document_sentences)
+
+            embeddings.append(output_batch_document_sentences_rnn['sentence_embedding'])
+
+        all_embeddings = torch.stack(embeddings)
+
+        return all_embeddings
+
+
+    def predict(self, sentences: List[List[str]],
+                batch_size: int = 32,
+                show_progress_bar: bool = None,
+                num_workers: int = 0,
+                activation_fct=None,
+                apply_softmax=False,
+                convert_to_numpy: bool = True,
+                convert_to_tensor: bool = False
+                ):
         """
         Performs predicts with the CrossEncoder on the given sentence pairs.
         :param sentences: A list of sentence pairs [[Sent1, Sent2], [Sent3, Sent4]]
@@ -411,10 +530,12 @@ class DocumentCrossEncoder():
             sentences = [sentences]
             input_was_string = True
 
-        inp_dataloader = DataLoader(sentences, batch_size=batch_size, collate_fn=self.smart_batching_collate_text_only, num_workers=num_workers, shuffle=False)
+        inp_dataloader = DataLoader(sentences, batch_size=batch_size, collate_fn=self.smart_batching_collate_text_only,
+                                    num_workers=num_workers, shuffle=False)
 
         if show_progress_bar is None:
-            show_progress_bar = (logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
+            show_progress_bar = (
+                        logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
 
         iterator = inp_dataloader
         if show_progress_bar:
@@ -448,8 +569,7 @@ class DocumentCrossEncoder():
 
         return pred_scores
 
-
-    def _eval_during_training (self, evaluator, output_path, save_best_model, epoch, steps, callback):
+    def _eval_during_training(self, evaluator, output_path, save_best_model, epoch, steps, callback):
         """Runs evaluation during the training"""
         if evaluator is not None:
             score = evaluator(self, output_path=output_path, epoch=epoch, steps=steps)
@@ -476,3 +596,5 @@ class DocumentCrossEncoder():
         Same function as save
         """
         return self.save(path)
+
+
