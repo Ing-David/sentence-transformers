@@ -77,7 +77,7 @@ for i in tqdm(range(0,len(dataframe_merge))):
 logging.info("Queries: {}".format(len(queries_dev)))
 logging.info("Corpus: {}".format(len(corpus_concept_ids_dev)))
 
-ir_evaluator = evaluation.InformationRetrievalEvaluator(queries_dev, corpus_concept_ids_dev, relevant_concept_ids_dev,
+ir_evaluator = evaluation.DocumentInformationRetrievalEvaluator(queries_dev, corpus_concept_ids_dev, relevant_concept_ids_dev,
                                                         show_progress_bar=True,
                                                         corpus_chunk_size=100000,
                                                         precision_recall_at_k=[10, 100],
