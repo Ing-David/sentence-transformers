@@ -12,7 +12,7 @@ from typing import List, Tuple, Dict, Set, Callable
 
 logger = logging.getLogger(__name__)
 
-class InformationRetrievalEvaluator(SentenceEvaluator):
+class DocumentInformationRetrievalEvaluator(SentenceEvaluator):
     """
     This class evaluates an Information Retrieval (IR) setting.
 
@@ -67,7 +67,7 @@ class InformationRetrievalEvaluator(SentenceEvaluator):
         if name:
             name = "_" + name
 
-        self.csv_file: str = "Information-Retrieval_evaluation" + name + "_results.csv"
+        self.csv_file: str = "Document Information-Retrieval_evaluation" + name + "_results.csv"
         self.csv_headers = ["epoch", "steps"]
 
         for score_name in self.score_function_names:
@@ -96,7 +96,7 @@ class InformationRetrievalEvaluator(SentenceEvaluator):
         if corpus_model is None:
             corpus_model = model
 
-        logger.info("Information Retrieval Evaluation on " + self.name + " dataset" + out_txt)
+        logger.info("Document Information Retrieval Evaluation on " + self.name + " dataset" + out_txt)
 
         max_k = max(max(self.mrr_at_k), max(self.ndcg_at_k), max(self.accuracy_at_k), max(self.precision_recall_at_k), max(self.map_at_k))
 
@@ -118,7 +118,7 @@ class InformationRetrievalEvaluator(SentenceEvaluator):
 
             #Encode chunk of corpus
             if corpus_embeddings is None:
-                sub_corpus_embeddings = corpus_model.encode(self.corpus[corpus_start_idx:corpus_end_idx], show_progress_bar=False, batch_size=self.batch_size, convert_to_tensor=True)
+                sub_corpus_embeddings = corpus_model.encode(self.corpus[corpus_start_idx:corpus_end_idx], show_progress_bar=False, batch_size=self.batch_size)
             else:
                 sub_corpus_embeddings = corpus_embeddings[corpus_start_idx:corpus_end_idx]
 

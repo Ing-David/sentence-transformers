@@ -23,15 +23,15 @@ logger = logging.getLogger(__name__)
 #### /print debug information to stdout
 
 # dataset's path
-agritrop_dataset_path = 'datasets/corpus_agritrop_training.tsv'
+agritrop_dataset_path = 'datasets/corpus_training_transformer.tsv'
 
 # Define our Cross-Encoder
-train_batch_size = 1
+train_batch_size = 16
 num_epochs = 4
 model_save_path = 'output/training_agritrop_transformer-' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
-model = DocumentCrossEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512)
+model = DocumentCrossEncoder('bert-base-uncased', num_labels=1, max_length=512)
 
 # Read Agritrop's dataset
 logger.info("Read Agritrop's train dataset")
@@ -70,7 +70,7 @@ train_dataloader = DataLoader(train_samples, shuffle=True, batch_size=train_batc
 # print(len(train_dataloader.dataset))
 
 # We add an evaluator, which evaluates the performance during training
-#evaluator = CECorrelationEvaluator.from_input_examples(dev_samples, name='agritrop-dev')
+# evaluator = CECorrelationEvaluator.from_input_examples(dev_samples, name='agritrop-dev')
 
 
 # Configure the training
@@ -82,8 +82,7 @@ model.fit(train_dataloader=train_dataloader,
           evaluator=None,
           epochs=num_epochs,
           warmup_steps=warmup_steps,
-          output_path=model_save_path,
-          sub_batches=1)
+          output_path=model_save_path)
 
 ##### Load model and eval on test set
 # model = DocumentCrossEncoder(model_save_path)
