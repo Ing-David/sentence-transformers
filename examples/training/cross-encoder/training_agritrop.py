@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 #### /print debug information to stdout
 
 # dataset's path
-agritrop_dataset_path = 'datasets/corpus_agritrop_training.tsv'
+agritrop_dataset_path = 'datasets/corpus_training_transformer.tsv'
 
 # Define our Cross-Encoder
-train_batch_size = 1
+train_batch_size = 16
 num_epochs = 4
 model_save_path = 'output/training_agritrop_transformer-' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -69,7 +69,7 @@ train_dataloader = DataLoader(train_samples, shuffle=False, batch_size=train_bat
 # print(len(train_dataloader.dataset))
 
 # We add an evaluator, which evaluates the performance during training
-#evaluator = CECorrelationEvaluator.from_input_examples(dev_samples, name='agritrop-dev')
+# evaluator = CECorrelationEvaluator.from_input_examples(dev_samples, name='agritrop-dev')
 
 
 # Configure the training
