@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 #### /print debug information to stdout
 
 # dataset's path
-agritrop_dataset_path = 'datasets/corpus_training_transformer.tsv'
+agritrop_dataset_path = 'datasets/corpus_agritrop_training_transformers.tsv'
 
 # Define our Cross-Encoder
-train_batch_size = 16
+train_batch_size = 1
 num_epochs = 4
 model_save_path = 'output/training_agritrop_transformer-' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -42,23 +42,23 @@ train_samples = []
 dev_samples = []
 test_samples = []
 
-df_document_groups = df_transformer.groupby("document_id")
+df_document_groups = df_transformer.groupby("doc_ids")
 
 for group in tqdm(df_document_groups):
 
-    split_document_sentences = nltk.tokenize.sent_tokenize(group['sentence1'])
+    split_document_sentences = nltk.tokenize.sent_tokenize(group[1]['sentence1'].iloc[0])
     concept_labels = []
     labels = []
-    for index, row in group.iterrows():
+    for index, row in group[1].iterrows():
         split_concept_labels = list(row['sentence2'].split(","))
         concept_labels.append(split_concept_labels)
         labels.append(int(row['score']))
     input_example = InputExampleDocument(document_sentences=split_document_sentences, concept_labels=concept_labels,
-                                         label=labels)
-
-    if group['split'] == 'dev':
+                                         labels=labels)
+    split = group[1]['split'].iloc[0]
+    if split == 'dev':
         dev_samples.append(input_example)
-    elif group['split'] == 'test':
+    elif split == 'test':
         test_samples.append(input_example)
     else:
         train_samples.append(input_example)
