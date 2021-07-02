@@ -31,7 +31,7 @@ num_epochs = 4
 model_save_path = 'output/training_agritrop_transformer-' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
-model = DocumentCrossEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512)
+model = DocumentCrossEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=32)
 
 # Read Agritrop's dataset
 logger.info("Read Agritrop's train dataset")
@@ -42,30 +42,29 @@ train_samples = []
 dev_samples = []
 test_samples = []
 
-for i in tqdm(range(0, len(df_transformer))):
+df_document_groups = df_transformer.groupby("document_id")
 
-    if df_transformer['split'][i] == 'dev':
-        split_sentences = nltk.tokenize.sent_tokenize(df_transformer['sentence1'][i])
-        split_concept_labels = list(df_transformer['sentence2'][i].split(","))
-        dev_samples.append(InputExampleDocument(document_sentences=split_sentences, concept_labels=split_concept_labels,
-                                                label=df_transformer['score'][i]))
+for group in tqdm(df_document_groups):
 
-    elif df_transformer['split'][i] == 'test':
-        split_sentences = nltk.tokenize.sent_tokenize(df_transformer['sentence1'][i])
-        split_concept_labels = list(df_transformer['sentence2'][i].split(","))
-        test_samples.append(
-            InputExampleDocument(document_sentences=split_sentences, concept_labels=split_concept_labels,
-                                 label=df_transformer['score'][i]))
+    split_document_sentences = nltk.tokenize.sent_tokenize(group['sentence1'])
+    concept_labels = []
+    labels = []
+    for index, row in group.iterrows():
+        split_concept_labels = list(row['sentence2'].split(","))
+        concept_labels.append(split_concept_labels)
+        labels.append(int(row['score']))
+    input_example = InputExampleDocument(document_sentences=split_document_sentences, concept_labels=concept_labels,
+                                         label=labels)
 
+    if group['split'] == 'dev':
+        dev_samples.append(input_example)
+    elif group['split'] == 'test':
+        test_samples.append(input_example)
     else:
-        split_sentences = nltk.tokenize.sent_tokenize(df_transformer['sentence1'][i])
-        split_concept_labels = list(df_transformer['sentence2'][i].split(","))
-        train_samples.append(
-            InputExampleDocument(document_sentences=split_sentences, concept_labels=split_concept_labels,
-                                 label=df_transformer['score'][i]))
+        train_samples.append(input_example)
 
 # We wrap train_samples (which is a List[InputExample]) into a pytorch DataLoader
-train_dataloader = DataLoader(train_samples, shuffle=True, batch_size=train_batch_size)
+train_dataloader = DataLoader(train_samples, shuffle=False, batch_size=train_batch_size)
 
 # print(len(train_dataloader.dataset))
 
@@ -83,7 +82,7 @@ model.fit(train_dataloader=train_dataloader,
           epochs=num_epochs,
           warmup_steps=warmup_steps,
           output_path=model_save_path,
-          sub_batches=1)
+          sub_batches=2, use_amp=True)
 
 ##### Load model and eval on test set
 # model = DocumentCrossEncoder(model_save_path)

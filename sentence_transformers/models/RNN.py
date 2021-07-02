@@ -16,6 +16,7 @@ class RNN(nn.Module):
 
     def forward(self, x):
         # BiGRU
+        # x = x.squeeze()
         gru_out, hid = self.BiGRU(x)
         h2 = hid[2, :, :]
         h3 = hid[3, :, :]

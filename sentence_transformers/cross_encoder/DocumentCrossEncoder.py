@@ -9,6 +9,8 @@ from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm, trange
+
+from sentence_transformers.losses.IndexingMultipleNegativesRankingLoss import IndexingMultipleNegativesRankingLoss
 from .. import DocumentTransformer, util
 from ..evaluation import SentenceEvaluator
 from ..models import RNN, Transformer, Pooling
@@ -271,7 +273,7 @@ class DocumentCrossEncoder():
             scheduler = DocumentTransformer._get_scheduler(optimizer, scheduler=scheduler, warmup_steps=warmup_steps, t_total=num_train_steps)
 
         if loss_fct is None:
-            loss_fct = MultipleNegativesRankingLoss(model=self.model_rnn)
+            loss_fct = IndexingMultipleNegativesRankingLoss(model=self.model_rnn)
 
         skip_scheduler = False
 
@@ -289,6 +291,7 @@ class DocumentCrossEncoder():
 
 
                 for i in tqdm(range(0, len(document_sentences['input_ids'])), desc="Each document in batch"):
+                    GPUtil.showUtilization()
                     # dictionary
                     document_sentences_batch = {}
                     concept_labels_batch = {}
@@ -306,16 +309,16 @@ class DocumentCrossEncoder():
                         attention_masks = []
                         sub_batch_list = self._sub_batching(sub_batches, document_sentences_batch)
                         for sub_batch in tqdm(sub_batch_list, desc="Processing sub-batch"):
-                            GPUtil.showUtilization()
                             local_output = self.model_transformer(sub_batch)
-                            token_embeddings.append(local_output['token_embeddings'].cpu())
-                            cls_tokens.append(local_output['cls_token_embeddings'].cpu())
-                            attention_masks.append(local_output['attention_mask'].cpu())
+                            GPUtil.showUtilization()
+                            token_embeddings.append(local_output['token_embeddings'])
+                            cls_tokens.append(local_output['cls_token_embeddings'])
+                            attention_masks.append(local_output['attention_mask'])
 
                         document_sentences_batch_output = {
-                            'token_embeddings' : torch.stack(token_embeddings, dim=0),
-                            'cls_token_embeddings': torch.stack(cls_tokens, dim = 0),
-                            'attention_mask': torch.stack(attention_masks, dim = 0)
+                            'token_embeddings' : torch.vstack(token_embeddings),
+                            'cls_token_embeddings': torch.vstack(cls_tokens),
+                            'attention_mask': torch.vstack(attention_masks)
                         }
                     else:
                         # BERT process via Transformer for document
@@ -333,8 +336,8 @@ class DocumentCrossEncoder():
                     output_pooling_concept_labels = self.model_pooling(concept_labels_batch_output)
 
                     # Put them into the list
-                    list_document_sentences_pooling.append(output_pooling_document_sentences['token_embeddings'].data)
-                    list_concept_labels_pooling.append(output_pooling_concept_labels['sentence_embedding'].data)
+                    list_document_sentences_pooling.append(output_pooling_document_sentences['sentence_embedding'])
+                    list_concept_labels_pooling.append(output_pooling_concept_labels['sentence_embedding'])
 
                     # Scores
                     list_scores.append(labels[i].item())
@@ -342,6 +345,8 @@ class DocumentCrossEncoder():
                 # Combine each document and concept's labels in the batch
                 combine_batch_document_sentences = torch.stack(list_document_sentences_pooling, dim=0)
                 combine_batch_concept_labels = torch.stack(list_concept_labels_pooling, dim=0)
+                del list_document_sentences_pooling
+                del list_concept_labels_pooling
                 # scores
                 tensor_scores = torch.tensor(list_scores, dtype=torch.float)
                 # Put Documents and Concept's labels into RNN
