@@ -1,24 +1,31 @@
-from torch.utils.data import DataLoader
-import math
-from sentence_transformers import LoggingHandler, util
-from sentence_transformers.cross_encoder import DocumentCrossEncoder
-from sentence_transformers.cross_encoder.evaluation import CECorrelationEvaluator
-from sentence_transformers import InputExampleDocument
 import logging
-from datetime import datetime
-import sys
+import math
+import multiprocessing
 import os
-import gzip
-import csv
-import pandas as pd
-from tqdm import tqdm
+from datetime import datetime
+
 import nltk
+import pandas as pd
+import torch.distributed
+from fairscale.utils.testing import dist_init
+from torch._C._distributed_c10d import HashStore
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+from sentence_transformers import InputExampleDocument
+from sentence_transformers import LoggingHandler
+from sentence_transformers.cross_encoder import DocumentBiEncoder
+
+# torch.distributed.init_process_group(backend="nccl",store=HashStore(), world_size=8, rank=0)
 
 #### Just some code to print debug information to stdout
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO,
                     handlers=[LoggingHandler()])
+
+os.putenv("TOKENIZERS_PARALLELISM", "true")
+
 logger = logging.getLogger(__name__)
 #### /print debug information to stdout
 
@@ -29,9 +36,6 @@ agritrop_dataset_path = 'datasets/corpus_agritrop_training_transformers.tsv'
 train_batch_size = 1
 num_epochs = 4
 model_save_path = 'output/training_agritrop_transformer-' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-# We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
-model = DocumentCrossEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=32)
 
 # Read Agritrop's dataset
 logger.info("Read Agritrop's train dataset")
@@ -71,18 +75,21 @@ train_dataloader = DataLoader(train_samples, shuffle=False, batch_size=train_bat
 # We add an evaluator, which evaluates the performance during training
 # evaluator = CECorrelationEvaluator.from_input_examples(dev_samples, name='agritrop-dev')
 
+# We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
+model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=40, device="cuda")
 
 # Configure the training
 warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
 logger.info("Warmup-steps: {}".format(warmup_steps))
-
+dist_init(0,8)
 # Train the model
+multiprocessing.spawn(model.fit,
+                      art
 model.fit(train_dataloader=train_dataloader,
           evaluator=None,
           epochs=num_epochs,
           warmup_steps=warmup_steps,
-          output_path=model_save_path,
-          sub_batches=2, use_amp=True)
+          output_path=model_save_path, use_amp=True)
 
 ##### Load model and eval on test set
 # model = DocumentCrossEncoder(model_save_path)

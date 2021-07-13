@@ -23,7 +23,7 @@ from .evaluation import SentenceEvaluator
 from .util import import_from_string, batch_to_device, http_get
 from .models import Transformer, Pooling
 from . import __version__
-from .models import RNN
+from .models import DocumentEmbeddingGRU
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +232,7 @@ class DocumentTransformer(nn.Sequential):
             all_embeddings = all_embeddings[0]
 
         if rnn_model:
-            model = RNN(768,1)
+            model = DocumentEmbeddingGRU(768, 1)
             attention_output_embedding = model(all_embeddings)
 
         return attention_output_embedding

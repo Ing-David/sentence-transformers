@@ -1,8 +1,9 @@
 import torch
 from torch import nn, Tensor
-from typing import Iterable, Dict
+from typing import Iterable, Dict, List
 from ..SentenceTransformer import SentenceTransformer
 from .. import util
+
 
 class IndexingMultipleNegativesRankingLoss(nn.Module):
     """
@@ -37,7 +38,8 @@ class IndexingMultipleNegativesRankingLoss(nn.Module):
             train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=train_batch_size)
             train_loss = losses.MultipleNegativesRankingLoss(model=model)
     """
-    def __init__(self, model: nn.Module, scale: float = 20.0, similarity_fct = util.cos_sim):
+
+    def __init__(self, model: nn.Module, scale: float = 20.0, similarity_fct=util.cos_sim):
         """
         :param model: SentenceTransformer model
         :param scale: Output of similarity function is multiplied by scale value
@@ -49,23 +51,13 @@ class IndexingMultipleNegativesRankingLoss(nn.Module):
         self.similarity_fct = similarity_fct
         self.cross_entropy_loss = nn.CrossEntropyLoss()
 
+    def forward(self, sentence_features: List[Tensor], labels: Tensor):
+        # reps = [sentence_feature for sentence_feature in sentence_features]
 
-    def forward(self, sentence_features: Iterable[Dict[str, Tensor]], labels: Tensor):
-        reps = [sentence_feature['sentence_embedding'] for sentence_feature in sentence_features]
+        embeddings_a = sentence_features[0]
+        embeddings_b = sentence_features[1]
 
-        embeddings_a = reps[0]
-        if len(reps[0].shape) > 2:
-            embeddings_a = embeddings_a.squeeze()
-
-        embeddings_b = reps[1]
-        if len(reps[1].shape) > 2:
-            embeddings_b = embeddings_b.squeeze()
 
         scores = self.similarity_fct(embeddings_a, embeddings_b) * self.scale
         # labels = torch.tensor(range(len(scores)), dtype=torch.long, device=scores.device)  # Example a[i] should match with b[i]
         return self.cross_entropy_loss(scores, labels)
-
-
-
-
-

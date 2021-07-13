@@ -6,7 +6,7 @@ Usage:
 python eval_msmarco.py model_name [max_corpus_size_in_thousands]
 """
 
-from sentence_transformers import  LoggingHandler, DocumentCrossEncoder, evaluation, util, models
+from sentence_transformers import  LoggingHandler, DocumentBiEncoder, evaluation, util, models
 import logging
 import sys
 import os
@@ -25,7 +25,7 @@ model_name = 'bert-base-uncased'
 
 ####  Load model
 
-model = DocumentCrossEncoder(model_name)
+model = DocumentBiEncoder(model_name)
 
 ### Data files
 data_folder = 'agritrop-data'

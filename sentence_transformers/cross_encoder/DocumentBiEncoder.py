@@ -13,16 +13,19 @@ from tqdm.autonotebook import tqdm, trange
 from sentence_transformers.losses.IndexingMultipleNegativesRankingLoss import IndexingMultipleNegativesRankingLoss
 from .. import DocumentTransformer, util
 from ..evaluation import SentenceEvaluator
-from ..models import RNN, Transformer, Pooling
+from ..models import DocumentEmbeddingGRU, Transformer, Pooling
 from collections import defaultdict
 from sentence_transformers.losses import MultipleNegativesRankingLoss
 import nltk
 
+from ..models.DocumentPooling import DocumentPooling
+
 logger = logging.getLogger(__name__)
 import GPUtil
+from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 
 
-class DocumentCrossEncoder():
+class DocumentBiEncoder():
     def __init__(self, model_name: str, num_labels: int = None, max_length: int = None, device: str = None,
                  tokenizer_args: Dict = {},
                  default_activation_function=None):
@@ -51,11 +54,12 @@ class DocumentCrossEncoder():
             self.config.num_labels = num_labels
 
         # Model RNN
-        self.model_rnn = RNN()
+        self.model_rnn = FSDP(DocumentEmbeddingGRU())
         # Model BERT via Transformer
         self.transformer_model = Transformer(model_name)
         # Model Pooling
-        self.pooling_layer = Pooling(768, 'mean')
+        self.token_pooling_layer = Pooling(768, 'mean')
+
         # Tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_args)
         self.max_length = max_length
@@ -85,14 +89,14 @@ class DocumentCrossEncoder():
         yield level, len(array)
         try:
             for row in array:
-                yield from DocumentCrossEncoder.get_dimensions(row, level + 1)
+                yield from DocumentBiEncoder.get_dimensions(row, level + 1)
         except TypeError:  # not an iterable
             pass
 
     @staticmethod
     def get_max_shape(array):
         dimensions = defaultdict(int)
-        for level, length in DocumentCrossEncoder.get_dimensions(array):
+        for level, length in DocumentBiEncoder.get_dimensions(array):
             dimensions[level] = max(dimensions[level], length)
         return [value for _, value in sorted(dimensions.items())]
 
@@ -100,15 +104,15 @@ class DocumentCrossEncoder():
     def iterate_nested_array(array, index=()):
         try:
             for idx, row in enumerate(array):
-                yield from DocumentCrossEncoder.iterate_nested_array(row, (*index, idx))
+                yield from DocumentBiEncoder.iterate_nested_array(row, (*index, idx))
         except TypeError:  # final level
             yield (*index, slice(len(array))), array
 
     @staticmethod
     def pad(array, fill_value):
-        dimensions = DocumentCrossEncoder.get_max_shape(array)
+        dimensions = DocumentBiEncoder.get_max_shape(array)
         result = np.full(dimensions, fill_value)
-        for index, value in DocumentCrossEncoder.iterate_nested_array(array):
+        for index, value in DocumentBiEncoder.iterate_nested_array(array):
             result[index] = value
         return result
 
@@ -142,12 +146,14 @@ class DocumentCrossEncoder():
                 concept_token_type_ids.append(concept_label_tokens['token_type_ids'])
                 concept_attention_mask.append(concept_label_tokens['attention_mask'])
 
-            # Padding concept labels
-            tokenized_concept_labels.append({
-                'input_ids': torch.tensor(self.pad(concept_input_ids, fill_value=0)).to(self._target_device),
-                'token_type_ids': torch.tensor(self.pad(concept_token_type_ids, fill_value=0)).to(self._target_device),
-                'attention_mask': torch.tensor(self.pad(concept_attention_mask, fill_value=0)).to(self._target_device)
-            })
+                # Padding concept labels
+                tokenized_concept_labels.append({
+                    'input_ids': torch.tensor(self.pad(concept_input_ids, fill_value=0)).to(self._target_device),
+                    'token_type_ids': torch.tensor(self.pad(concept_token_type_ids, fill_value=0)).to(
+                        self._target_device),
+                    'attention_mask': torch.tensor(self.pad(concept_attention_mask, fill_value=0)).to(
+                        self._target_device)
+                })
             # Score for each line
             labels.append(torch.tensor(document.labels).to(self._target_device))
 
@@ -226,7 +232,7 @@ class DocumentCrossEncoder():
 
         self.model_rnn.to(self._target_device)
         self.transformer_model.to(self._target_device)
-        self.pooling_layer.to(self._target_device)
+        self.token_pooling_layer.to(self._target_device)
 
         if output_path is not None:
             os.makedirs(output_path, exist_ok=True)
@@ -259,80 +265,77 @@ class DocumentCrossEncoder():
             training_steps = 0
             self.model_rnn.zero_grad()
             self.model_rnn.train()
-
-            for document_sentences, concept_labels, labels in tqdm(train_dataloader, desc="Iteration", smoothing=0.05):
+            iteration_progress = tqdm(train_dataloader, desc="Iteration", smoothing=0.05)
+            for document_sentences, concept_labels, labels in iteration_progress:
 
                 # Initialisation list
-                list_concept_labels_pooling = []
-                list_document_sentences_pooling = []
+                concept_label_embeddings = []
                 list_scores = []
 
-                for i in tqdm(range(0, len(document_sentences['input_ids'])), desc="Each document in batch"):
-                    GPUtil.showUtilization()
-                    # dictionary
-                    document_sentences_batch = {}
-                    concept_labels_batch = {}
-                    # Document
-                    document_sentences_batch['input_ids'] = document_sentences['input_ids'][i, :, :]
-                    document_sentences_batch['token_type_ids'] = document_sentences['token_type_ids'][i, :, :]
-                    document_sentences_batch['attention_mask'] = document_sentences['attention_mask'][i, :, :]
+                if document_sentences['input_ids'].shape[0] > 1:
+                    raise Exception("Document-wise batch size must be 1. Please use sub-batching instead.")
 
-                    if sub_batches > 0:
-                        token_embeddings = []
-                        cls_tokens = []
-                        attention_masks = []
-                        sub_batch_list = self._sub_batching(sub_batches, document_sentences_batch)
-                        for sub_batch in tqdm(sub_batch_list, desc="Processing sub-batch"):
-                            local_output = self.transformer_model(sub_batch)
-                            GPUtil.showUtilization()
-                            token_embeddings.append(local_output['token_embeddings'])
-                            cls_tokens.append(local_output['cls_token_embeddings'])
-                            attention_masks.append(local_output['attention_mask'])
+                # GPUtil.showUtilization()
+                # dictionary
+                # Document
+                document_sentences['input_ids'] = document_sentences['input_ids'][0, :, :]
+                document_sentences['token_type_ids'] = document_sentences['token_type_ids'][0, :, :]
+                document_sentences['attention_mask'] = document_sentences['attention_mask'][0, :, :]
 
-                        document_sentences_batch_output = {
-                            'token_embeddings': torch.vstack(token_embeddings),
-                            'cls_token_embeddings': torch.vstack(cls_tokens),
-                            'attention_mask': torch.vstack(attention_masks)
-                        }
-                    else:
-                        # BERT process via Transformer for document
-                        document_sentences_batch_output = self.transformer_model(document_sentences_batch)
-                    # Pooling procedure for document
-                    output_pooling_document_sentences = self.pooling_layer(document_sentences_batch_output)
+                sentences_token_pooling_output = None
+                if sub_batches > 0:
+                    token_embeddings = []
+                    cls_tokens = []
+                    attention_masks = []
+                    sub_batch_list = self._sub_batching(sub_batches, document_sentences)
+                    for sub_batch in tqdm(sub_batch_list, desc="Processing sub-batch"):
+                        local_output = self.transformer_model(sub_batch)
+                        # GPUtil.showUtilization()
+                        token_embeddings.append(local_output['token_embeddings'])
+                        cls_tokens.append(local_output['cls_token_embeddings'])
+                        attention_masks.append(local_output['attention_mask'])
 
+                    document_sentences = {
+                        'token_embeddings': torch.vstack(token_embeddings),
+                        'cls_token_embeddings': torch.vstack(cls_tokens),
+                        'attention_mask': torch.vstack(attention_masks)
+                    }
+                    del token_embeddings
+                    del cls_tokens
+                    del attention_masks
+                else:
+                    # BERT process via Transformer for document
+                    document_sentences = self.transformer_model(document_sentences)
+                document_sentences = self.token_pooling_layer(document_sentences)
+
+                for current_concept_labels in concept_labels:
                     # Concept's labels
-                    concept_labels_batch['input_ids'] = concept_labels['input_ids'][i, :, :]
-                    concept_labels_batch['token_type_ids'] = concept_labels['token_type_ids'][i, :, :]
-                    concept_labels_batch['attention_mask'] = concept_labels['attention_mask'][i, :, :]
+                    current_concept_labels['input_ids'] = current_concept_labels['input_ids'][0, :, :]
+                    current_concept_labels['token_type_ids'] = current_concept_labels['token_type_ids'][0, :, :]
+                    current_concept_labels['attention_mask'] = current_concept_labels['attention_mask'][0, :, :]
                     # BERT process via Transformer for concept's labels
-                    concept_labels_batch_output = self.transformer_model(concept_labels_batch)
+                    current_concept_labels = self.transformer_model(current_concept_labels)
                     # Pooling procedure for concept's labels
-                    output_pooling_concept_labels = self.pooling_layer(concept_labels_batch_output)
+                    current_concept_labels = self.token_pooling_layer(current_concept_labels)
+                    current_concept_labels = self.model_rnn(
+                        current_concept_labels['sentence_embedding'].unsqueeze(0))
+                    concept_label_embeddings.append(current_concept_labels['sentence_embedding'].squeeze(0))
 
-                    # Put them into the list
-                    list_document_sentences_pooling.append(output_pooling_document_sentences['sentence_embedding'])
-                    list_concept_labels_pooling.append(output_pooling_concept_labels['sentence_embedding'])
-
-                    # Scores
-                    list_scores.append(labels[i].item())
+                # Scores
+                labels = labels[0]
 
                 # Combine each document and concept's labels in the batch
-                combine_batch_document_sentences = torch.stack(list_document_sentences_pooling, dim=0)
-                combine_batch_concept_labels = torch.stack(list_concept_labels_pooling, dim=0)
-                del list_document_sentences_pooling
-                del list_concept_labels_pooling
-                # scores
-                tensor_scores = torch.tensor(list_scores, dtype=torch.float)
-                # Put Documents and Concept's labels into RNN
-                output_batch_document_sentences_rnn = self.model_rnn(combine_batch_document_sentences)
-                output_batch_concept_labels_rnn = self.model_rnn(combine_batch_concept_labels)
+                document_sentences = document_sentences['sentence_embedding']
+                document_sentences = self.model_rnn(document_sentences.unsqueeze(0))[
+                    'sentence_embedding']
+                document_sentences = \
+                    document_sentences.expand(labels.shape[0], document_sentences.shape[1])
+
+                concept_label_embeddings = torch.stack(concept_label_embeddings, dim=0)
 
                 if use_amp:
                     with autocast():
-
-                        loss_value = loss_fct([output_batch_document_sentences_rnn, output_batch_concept_labels_rnn],
-                                              tensor_scores)
-
+                        loss_value = loss_fct([document_sentences, concept_label_embeddings], labels)
                     scale_before_step = scaler.get_scale()
                     scaler.scale(loss_value).backward()
                     scaler.unscale_(optimizer)
@@ -343,8 +346,7 @@ class DocumentCrossEncoder():
                     skip_scheduler = scaler.get_scale() != scale_before_step
                 else:
 
-                    loss_value = loss_fct([output_batch_document_sentences_rnn, output_batch_concept_labels_rnn],
-                                          tensor_scores)
+                    loss_value = loss_fct([document_sentences, concept_label_embeddings], labels)
                     loss_value.backward()
                     torch.nn.utils.clip_grad_norm_(self.model_rnn.parameters(), max_grad_norm)
                     optimizer.step()
@@ -355,6 +357,7 @@ class DocumentCrossEncoder():
                     scheduler.step()
 
                 training_steps += 1
+                iteration_progress.set_postfix({'loss': str(loss_value.item())})
 
                 if evaluator is not None and evaluation_steps > 0 and training_steps % evaluation_steps == 0:
                     self._eval_during_training(evaluator, output_path, save_best_model, epoch, training_steps, callback)
@@ -400,7 +403,7 @@ class DocumentCrossEncoder():
         # self.eval()
         if show_progress_bar is None:
             show_progress_bar = (
-                        logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
+                    logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
 
         if device is None:
             device = self._target_device
@@ -460,7 +463,7 @@ class DocumentCrossEncoder():
                 # BERT process via Transformer for document
                 document_sentences_batch_output = self.transformer_model(document_sentences_batch)
                 # Pooling procedure for document
-                output_pooling_document_sentences = self.pooling_layer(document_sentences_batch_output)
+                output_pooling_document_sentences = self.token_pooling_layer(document_sentences_batch_output)
                 if output_value:
                     list_document_sentences_pooling.append(output_pooling_document_sentences[output_value].data)
 

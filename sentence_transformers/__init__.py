@@ -7,5 +7,5 @@ from .DocumentTransformer import DocumentTransformer
 from .readers import InputExample
 from .readers import InputExampleDocument
 from .cross_encoder.CrossEncoder import CrossEncoder
-from .cross_encoder.DocumentCrossEncoder import DocumentCrossEncoder
+from .cross_encoder.DocumentBiEncoder import DocumentBiEncoder
 
