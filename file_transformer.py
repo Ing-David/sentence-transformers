@@ -131,10 +131,8 @@ def remove_agritrop_link(s):
     s = re.sub("https://agritrop.cirad.fr/","",s)
     return s
 
-
 def fichier_transformer_csv(original_csv, class_csv, query_csv, email_address, train_percent, test_percent,
-                            random_state):
-
+                            abstract: bool, random_state):
     """
     Main function to get the overall dataframe (train + dev + test) ready to put into models
     :param original_csv: csv file of agritrop
@@ -143,8 +141,10 @@ def fichier_transformer_csv(original_csv, class_csv, query_csv, email_address, t
     :param email_address: Email address uses to avoid blocking from agritrop's web page when trying to access many times
     :param train_percent: put the percentage of train set eg. 0.6 mean 60%
     :param test_percent:  put the percentage of train set eg. 0.2 mean 20%. The rest i.e. 20% is for validation/dev
+    :param abstract: types boolean in case we want an additional column for abstract's text
     :param random_state: random the dataframe with the same value
     """
+
     # read file csv orginal
     df_original = pd.read_csv(original_csv, index_col=0)
     # remove row that column of body_grobid contains null and NaN value
@@ -198,22 +198,33 @@ def fichier_transformer_csv(original_csv, class_csv, query_csv, email_address, t
     dataframe_dev = get_dataframe(df_dev_set, df_query, df_query_negative, all_classes, type_dataframe='dev')
     dataframe_test = get_dataframe(df_test_set, df_query, df_query_negative, all_classes, type_dataframe='test')
 
-    # concatenate all dataframes together
+    # concatenate together
     dataframe_transformer = pd.concat([dataframe_train, dataframe_dev, dataframe_test], ignore_index=True)
     df_identify = df.rename({'body_grobid': 'sentence1'}, axis=1)
     df_tranformer_merge = dataframe_transformer.merge(df_identify, how='inner', on=['sentence1'])
-    dataframe_final_transformer = df_tranformer_merge[
-        ['split', 'score', 'sentence1', 'sentence2', 'concept_ids', 'ACCES_AGRITROP']]
-    dataframe_final_transformer = dataframe_final_transformer.rename({'ACCES_AGRITROP': 'doc_ids'}, axis=1)
 
-    # remove domain name
+    if abstract == True:
+        # filter column RESUM and body_grobid
+        df_abstract = df_clean[['RESUM', 'body_grobid']]
+        df_abstract = df_abstract.rename({'body_grobid': 'sentence1'}, axis=1)
+        df_tranformer_merge = df_tranformer_merge.merge(df_abstract, how='inner', on=['sentence1'])
+        dataframe_final_transformer = df_tranformer_merge[
+            ['split', 'score', 'RESUM', 'sentence1', 'sentence2', 'concept_ids', 'ACCES_AGRITROP']]
+        dataframe_final_transformer = dataframe_final_transformer.rename(
+            {'RESUM': 'abstract', 'ACCES_AGRITROP': 'doc_ids'}, axis=1)
+
+    else:
+        dataframe_final_transformer = df_tranformer_merge[
+            ['split', 'score', 'sentence1', 'sentence2', 'concept_ids', 'ACCES_AGRITROP']]
+        dataframe_final_transformer = dataframe_final_transformer.rename({'ACCES_AGRITROP': 'doc_ids'}, axis=1)
+
+    # remove domaine name
     dataframe_final_transformer['concept_ids'] = dataframe_final_transformer['concept_ids'].progress_apply(
         remove_uri_agrovoc)
     dataframe_final_transformer['doc_ids'] = dataframe_final_transformer['doc_ids'].progress_apply(remove_agritrop_link)
 
     return dataframe_final_transformer
 
-# dataframe_transformer = fichier_transformer_csv("corpus_titres_abstracts_corps_eng_articles-type_1_2_1000_limit.csv","class.csv","Query.csv",'prenom.nom@gmail.com', train_percent=0.6, test_percent=0.2, random_state = 42)
+# dataframe_transformer = fichier_transformer_csv("corpus_titres_abstracts_corps_eng_articles-type_1_2_1000_limit.csv","class.csv","Query.csv",'prenom.nom@gmail.com', train_percent=0.6, test_percent=0.2, abstract= True, random_state = 42)
 # dataframe_transformer.to_csv("corpus_agritrop_transformers.tsv",sep="\t", index=False)
-
 
