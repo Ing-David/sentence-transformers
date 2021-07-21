@@ -18,7 +18,7 @@ from tqdm.autonotebook import trange
 import math
 import queue
 import nltk
-from . import __DOWNLOAD_SERVER__
+from . import __DOWNLOAD_SERVER__, SentenceTransformer
 from .evaluation import SentenceEvaluator
 from .util import import_from_string, batch_to_device, http_get
 from .models import Transformer, Pooling

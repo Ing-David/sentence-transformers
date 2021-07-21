@@ -1,3 +1,4 @@
+from fairscale.utils.testing import dist_init
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
 import numpy as np
 import logging
@@ -54,7 +55,7 @@ class DocumentBiEncoder():
             self.config.num_labels = num_labels
 
         # Model RNN
-        self.model_rnn = FSDP(DocumentEmbeddingGRU())
+        self.model_rnn = DocumentEmbeddingGRU()
         # Model BERT via Transformer
         self.transformer_model = Transformer(model_name)
         # Model Pooling
@@ -226,6 +227,7 @@ class DocumentBiEncoder():
         """
         train_dataloader.collate_fn = self.smart_batching_collate
 
+        self.model_rnn = FSDP(self.model_rnn)
         if use_amp:
             from torch.cuda.amp import autocast
             scaler = torch.cuda.amp.GradScaler()
