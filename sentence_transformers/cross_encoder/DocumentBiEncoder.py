@@ -16,10 +16,7 @@ from .. import DocumentTransformer, util
 from ..evaluation import SentenceEvaluator
 from ..models import DocumentEmbeddingGRU, Transformer, Pooling
 from collections import defaultdict
-from sentence_transformers.losses import MultipleNegativesRankingLoss
 import nltk
-
-from ..models.DocumentPooling import DocumentPooling
 
 logger = logging.getLogger(__name__)
 import GPUtil
@@ -29,7 +26,7 @@ from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 class DocumentBiEncoder():
     def __init__(self, model_name: str, num_labels: int = None, max_length: int = None, device: str = None,
                  tokenizer_args: Dict = {},
-                 default_activation_function=None):
+                 default_activation_function=None, freeze_transformer=True, embedding_size=768):
         """
         A CrossEncoder takes exactly two sentences / texts as input and either predicts
         a score or label for this sentence pair. It can for example predict the similarity of the sentence pair
@@ -42,24 +39,28 @@ class DocumentBiEncoder():
         :param tokenizer_args: Arguments passed to AutoTokenizer
         :param default_activation_function: Callable (like nn.Sigmoid) about the default activation function that should be used on-top of model.predict(). If None. nn.Sigmoid() will be used if num_labels=1, else nn.Identity()
         """
-
+        self.embedding_size = embedding_size
         self.config = AutoConfig.from_pretrained(model_name)
         classifier_trained = True
-        if self.config.architectures is not None:
-            classifier_trained = any([arch.endswith('ForSequenceClassification') for arch in self.config.architectures])
+        # if self.config.architectures is not None:
+        #     classifier_trained = any([arch.endswith('ForSequenceClassification') for arch in self.config.architectures])
 
         if num_labels is None and not classifier_trained:
             num_labels = 1
 
-        if num_labels is not None:
-            self.config.num_labels = num_labels
+        # if num_labels is not None:
+        #     self.config.num_labels = num_labels
 
         # Model RNN
-        self.model_rnn = DocumentEmbeddingGRU()
+        self.model_rnn = DocumentEmbeddingGRU(input_size=self.embedding_size)
         # Model BERT via Transformer
         self.transformer_model = Transformer(model_name)
+
+        if freeze_transformer:
+            for param in self.transformer_model.parameters():
+                param.requires_grad = False
         # Model Pooling
-        self.token_pooling_layer = Pooling(768, 'mean')
+        self.token_pooling_layer = Pooling(self.embedding_size, 'mean')
 
         # Tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_args)
@@ -200,6 +201,7 @@ class DocumentBiEncoder():
             max_grad_norm: float = 1,
             use_amp: bool = False,
             callback: Callable[[float, int, int], None] = None,
+            use_fsdp=False
             ):
         """
         Train the model with the given training objective
@@ -226,8 +228,8 @@ class DocumentBiEncoder():
                 `score`, `epoch`, `steps`
         """
         train_dataloader.collate_fn = self.smart_batching_collate
-
-        self.model_rnn = FSDP(self.model_rnn)
+        if use_fsdp:
+            self.model_rnn = FSDP(self.model_rnn)
         if use_amp:
             from torch.cuda.amp import autocast
             scaler = torch.cuda.amp.GradScaler()
@@ -410,7 +412,8 @@ class DocumentBiEncoder():
         if device is None:
             device = self._target_device
 
-        # self.to(device)
+        self.transformer_model.to(device)
+        self.model_rnn.to(device)
 
         # Sort documents depend on their length
         length_sorted_idx = np.argsort([-self._text_length(doc) for doc in documents])
@@ -445,12 +448,9 @@ class DocumentBiEncoder():
             padding_document_token_type_ids = self.pad(document_token_type_ids, fill_value=0)
             padding_document_attention_mask = self.pad(document_attention_mask, fill_value=0)
             # Convert to torch
-            tensor_padding_document_input_ids = torch.tensor(padding_document_input_ids)
-            tokenized_document_sentences['input_ids'] = tensor_padding_document_input_ids
-            tensor_padding_document_token_type_ids = torch.tensor(padding_document_token_type_ids)
-            tokenized_document_sentences['token_type_ids'] = tensor_padding_document_token_type_ids
-            tensor_padding_document_attention_mask = torch.tensor(padding_document_attention_mask)
-            tokenized_document_sentences['attention_mask'] = tensor_padding_document_attention_mask
+            tokenized_document_sentences['input_ids'] = torch.tensor(padding_document_input_ids).to(device)
+            tokenized_document_sentences['token_type_ids'] = torch.tensor(padding_document_token_type_ids).to(device)
+            tokenized_document_sentences['attention_mask'] = torch.tensor(padding_document_attention_mask).to(device)
             # list pooling
             list_document_sentences_pooling = []
 

@@ -19,3 +19,5 @@ nr_*/
 /docs/make.bat
 /docs/Makefile
 /examples/training/quora_duplicate_questions/quora-IR-dataset/
+examples/training/cross-encoder/ddp_temp
+examples/training/cross-encoder/ffp_temp_rpc

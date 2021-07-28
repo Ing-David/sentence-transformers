@@ -15,7 +15,7 @@ class DocumentEmbeddingGRU(nn.Module):
         self.BiGRU = nn.GRU(self.input_size, self.hidden_size, dropout=0.5, num_layers=self.num_layers,
                             bidirectional=True, batch_first=True)
         self.multihead_attn = nn.MultiheadAttention(self.input_size, num_heads=1)
-        self.document_pooling_layer = DocumentPooling(768, 'mean')
+        self.document_pooling_layer = DocumentPooling(self.input_size , 'mean')
 
     def forward(self, x):
         # BiGRU

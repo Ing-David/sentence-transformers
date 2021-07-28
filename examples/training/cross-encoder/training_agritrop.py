@@ -16,6 +16,7 @@ from torch._C._distributed_c10d import HashStore
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from examples.training.ms_marco.eval_agritrop import create_evaluator
 from sentence_transformers import InputExampleDocument
 from sentence_transformers import LoggingHandler
 from sentence_transformers.cross_encoder import DocumentBiEncoder
@@ -28,7 +29,7 @@ def fit_model(i, model, train_dataloader,
               output_path, use_amp):
     open("ddp_temp", 'a').close()
     open("ffp_temp_rpc", 'a').close()
-    dist_init(i, 2, "ddp_temp","ffp_temp_rpc")
+    dist_init(i, 2, "ddp_temp", "ffp_temp_rpc")
     model.fit(train_dataloader=train_dataloader,
               evaluator=evaluator,
               epochs=epochs,
@@ -93,28 +94,28 @@ if __name__ == '__main__':
     # print(len(train_dataloader.dataset))
 
     # We add an evaluator, which evaluates the performance during training
-    # evaluator = CECorrelationEvaluator.from_input_examples(dev_samples, name='agritrop-dev')
+    evaluator_dev, _ = create_evaluator(df_transformer, "cpu")
 
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
-    model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=40, device="cuda")
+    model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=64, device="cuda:0")
 
     # Configure the training
     warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
     logger.info("Warmup-steps: {}".format(warmup_steps))
     # Train the model
-    mp.spawn(fit_model, args=(model, train_dataloader,
-                              None,  # evaluator,
-                              4,  # epochs
-                              warmup_steps,
-                              model_save_path,
-                              True),  # use amp
-             nprocs=8, join=True)
+    # mp.spawn(fit_model, args=(model, train_dataloader,
+    #                           None,  # evaluator,
+    #                           4,  # epochs
+    #                           warmup_steps,
+    #                           model_save_path,
+    #                           True),  # use amp
+    #          nprocs=8, join=True)
 
-    # model.fit(train_dataloader=train_dataloader,
-    #           evaluator=None,
-    #           epochs=num_epochs,
-    #           warmup_steps=warmup_steps,
-    #           output_path=model_save_path, use_amp=True)
+    model.fit(train_dataloader=train_dataloader,
+              evaluator=evaluator_dev,
+              epochs=num_epochs,
+              warmup_steps=warmup_steps,
+              output_path=model_save_path, use_amp=True)
 
     ##### Load model and eval on test set
     # model = DocumentCrossEncoder(model_save_path)
