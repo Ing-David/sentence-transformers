@@ -97,7 +97,7 @@ if __name__ == '__main__':
     evaluator_dev, _ = create_evaluator(df_transformer, "cpu")
 
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
-    model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=64, device="cuda:0")
+    model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=32, device="cuda:0")
 
     # Configure the training
     warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
