@@ -1,2 +1,2 @@
 from .CrossEncoder import CrossEncoder
-from .DocumentBiEncoder import DocumentBiEncoder
+from sentence_transformers.document_encoder.DocumentBiEncoder import DocumentBiEncoder

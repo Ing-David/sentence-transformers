@@ -12,9 +12,9 @@ from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm, trange
 
 from sentence_transformers.losses.IndexingMultipleNegativesRankingLoss import IndexingMultipleNegativesRankingLoss
-from .. import DocumentTransformer, util
-from ..evaluation import SentenceEvaluator
-from ..models import DocumentEmbeddingGRU, Transformer, Pooling
+from sentence_transformers import DocumentTransformer, util
+from sentence_transformers.evaluation import SentenceEvaluator
+from sentence_transformers.models import DocumentEmbeddingGRU, Transformer, Pooling
 from collections import defaultdict
 import nltk
 
