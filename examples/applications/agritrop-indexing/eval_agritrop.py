@@ -89,6 +89,6 @@ if __name__ == '__main__':
     # dataset
     dataframe = pd.read_csv(dataframe_path, sep="\t")
 
-    ir_evaluator, _ = create_evaluator(dataframe)
+    ir_evaluator, _ = create_evaluator(dataframe, device="cpu")
 
     ir_evaluator(model)
