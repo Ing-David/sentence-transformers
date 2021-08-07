@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     #dataframe-path
 
-    dataframe_path = "agritrop-data/corpus_agritrop_training_transformers.tsv"
+    dataframe_path = "datasets/corpus_agritrop_training_transformers.tsv"
 
     # dataset
     dataframe = pd.read_csv(dataframe_path, sep="\t")
