@@ -16,11 +16,11 @@ from torch._C._distributed_c10d import HashStore
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from examples.training.ms_marco.eval_agritrop import create_evaluator
+
 from sentence_transformers import InputExampleDocument
 from sentence_transformers import LoggingHandler
 from sentence_transformers.cross_encoder import DocumentBiEncoder
-
+from .eval_agritrop import create_evaluator
 
 def fit_model(i, model, train_dataloader,
               evaluator,
