@@ -19,7 +19,7 @@ from collections import defaultdict
 import nltk
 
 logger = logging.getLogger(__name__)
-import GPUtil
+# import GPUtil
 from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 
 
@@ -389,7 +389,7 @@ class DocumentBiEncoder():
             return sum([len(t) for t in text])
 
     def encode(self, documents: Union[List[str], List[int]],
-               batch_size: int = 32,
+               batch_size: int = 2,
                show_progress_bar: bool = None,
                output_value: str = 'sentence_embedding',
                device: str = None) -> Tensor:
@@ -426,36 +426,28 @@ class DocumentBiEncoder():
             # batch of documents
             documents_batch = documents_sorted[start_index:start_index + batch_size]
             # Initialisation
-            document_input_ids = [[] for _ in range(len(documents_batch))]
-            document_token_type_ids = [[] for _ in range(len(documents_batch))]
-            document_attention_mask = [[] for _ in range(len(documents_batch))]
-            tokenized_document_sentences = {}
+            document_input_ids = []
+            document_token_type_ids = []
+            document_attention_mask = []
             # Loop through
             for i in range(len(documents_batch)):
                 # Convert document to list of sentences
                 list_sentences = nltk.tokenize.sent_tokenize(documents_batch[i])
-                # tokenizer the list of sentences
-                a = self.tokenizer(list_sentences, padding=True, truncation='longest_first', max_length=512)
-                for b in a['input_ids']:
-                    document_input_ids[i].append(b)
-                for c in a['token_type_ids']:
-                    document_token_type_ids[i].append(c)
-                for d in a['attention_mask']:
-                    document_attention_mask[i].append(d)
-
-            # Padding Document
-            padding_document_input_ids = self.pad(document_input_ids, fill_value=0)
-            padding_document_token_type_ids = self.pad(document_token_type_ids, fill_value=0)
-            padding_document_attention_mask = self.pad(document_attention_mask, fill_value=0)
-            # Convert to torch
-            tokenized_document_sentences['input_ids'] = torch.tensor(padding_document_input_ids).to(device)
-            tokenized_document_sentences['token_type_ids'] = torch.tensor(padding_document_token_type_ids).to(device)
-            tokenized_document_sentences['attention_mask'] = torch.tensor(padding_document_attention_mask).to(device)
+                document_tokens = self.tokenizer(list_sentences, padding=True, truncation='longest_first',
+                                                 max_length=self.max_length)
+                document_input_ids.append(document_tokens['input_ids'])
+                document_token_type_ids.append(document_tokens['token_type_ids'])
+                document_attention_mask.append(document_tokens['attention_mask'])
+            tokenized_document_sentences = {
+                'input_ids': torch.tensor(self.pad(document_input_ids, fill_value=0)).to(self._target_device),
+                'token_type_ids': torch.tensor(self.pad(document_token_type_ids, fill_value=0)).to(self._target_device),
+                'attention_mask': torch.tensor(self.pad(document_attention_mask, fill_value=0)).to(self._target_device)
+            }
             # list pooling
             list_document_sentences_pooling = []
 
             # embeddings' part
-            for i in tqdm(range(0, len(tokenized_document_sentences['input_ids'])), desc="Each document in batch"):
+            for i in tqdm(range(0, tokenized_document_sentences['input_ids'].shape[0]), desc="Each document in batch"):
                 # dictionary
                 document_sentences_batch = {}
                 # Document
@@ -465,18 +457,11 @@ class DocumentBiEncoder():
                 # BERT process via Transformer for document
                 document_sentences_batch_output = self.transformer_model(document_sentences_batch)
                 # Pooling procedure for document
-                output_pooling_document_sentences = self.token_pooling_layer(document_sentences_batch_output)
-                if output_value:
-                    list_document_sentences_pooling.append(output_pooling_document_sentences[output_value].data)
-
-            # Combine each document in the batch to create tensor
-            combine_batch_document_sentences = torch.stack(list_document_sentences_pooling, dim=0)
-            # Put Documents and Concept's labels into RNN
-            output_batch_document_sentences_rnn = self.model_rnn(combine_batch_document_sentences)
-
-            embeddings.append(output_batch_document_sentences_rnn['sentence_embedding'])
-
-        all_embeddings = torch.stack(embeddings)
+                output_pooling_document_sentences = self.token_pooling_layer(document_sentences_batch_output)[
+                    output_value].data
+                output_batch_document_sentences_rnn = self.model_rnn(output_pooling_document_sentences.unsqueeze(0))
+                embeddings.append(output_batch_document_sentences_rnn['sentence_embedding'])
+        all_embeddings = torch.stack(embeddings).squeeze(1)
 
         return all_embeddings
 

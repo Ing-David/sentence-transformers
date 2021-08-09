@@ -13,7 +13,7 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
-def create_evaluator(dataframe, device):
+def create_evaluator(dataframe, device, limit=-1):
     ### Load data
 
     queries_dev = {}
@@ -23,7 +23,7 @@ def create_evaluator(dataframe, device):
     corpus_concept_ids_dev = {}
     corpus_concept_ids_test = {}
 
-    # Charge data
+    # Load data
     for i in tqdm(range(0,len(dataframe))):
       if dataframe['split'][i] == 'dev':
         queries_dev[dataframe['doc_ids'][i]] = dataframe['sentence1'][i]
@@ -37,7 +37,7 @@ def create_evaluator(dataframe, device):
     dataframe_new_column = dataframe.groupby(['doc_ids'])['concept_ids'].apply(','.join).reset_index().rename(columns={'concept_ids':'merge_concept_ids'})
     dataframe_merge = dataframe.merge(dataframe_new_column, on='doc_ids')
 
-    # Charge relevant data
+    # Load relevant data
     for i in tqdm(range(0,len(dataframe_merge))):
       if dataframe_merge['split'][i] == 'dev':
         if dataframe_merge['score'][i] == 1:
@@ -54,12 +54,14 @@ def create_evaluator(dataframe, device):
                                                             show_progress_bar=True,
                                                             corpus_chunk_size=100000,
                                                             precision_recall_at_k=[10, 100],
+                                                            batch_size=10,
                                                             name="agritrop dev", device=device)
 
     ir_evaluator_test = evaluation.DocumentInformationRetrievalEvaluator(queries_test, corpus_concept_ids_test, relevant_concept_ids_test,
                                                                         show_progress_bar=True,
                                                                         corpus_chunk_size=100000,
                                                                         precision_recall_at_k=[10, 100],
+                                                                         batch_size=10,
                                                                         name="agritrop test", device=device)
     return ir_evaluator_dev, ir_evaluator_test
 
@@ -72,11 +74,10 @@ if __name__ == '__main__':
     #### /print debug information to stdout
 
     #Name of the SBERT model
-    model_name = 'bert-base-uncased'
+    model_name = 'squeezebert/squeezebert-uncased'
 
     ####  Load model
-
-    model = DocumentBiEncoder(model_name)
+    model = DocumentBiEncoder(model_name, num_labels = 1, max_length = 5, device = "cpu")
 
     ### Data files
     data_folder = 'agritrop-data'

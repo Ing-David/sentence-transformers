@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     # Define our Cross-Encoder
     train_batch_size = 1
-    num_epochs = 4
+    num_epochs = 100
     model_save_path = 'output/training_agritrop_transformer-' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     # Read Agritrop's dataset
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     #          nprocs=8, join=True)
 
     model.fit(train_dataloader=train_dataloader,
-              evaluator=evaluator_dev,
+              evaluator=evaluator_dev, evaluation_steps=10,
               epochs=num_epochs,
               warmup_steps=warmup_steps,
               output_path=model_save_path, use_amp=True)
