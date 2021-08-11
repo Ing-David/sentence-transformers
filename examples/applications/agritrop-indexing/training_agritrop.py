@@ -94,7 +94,7 @@ if __name__ == '__main__':
     # print(len(train_dataloader.dataset))
 
     # We add an evaluator, which evaluates the performance during training
-    evaluator_dev, _ = create_evaluator(df_transformer, "cpu")
+    evaluator_dev, _ = create_evaluator(df_transformer, "cuda:0")
 
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
     model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=32, device="cuda:0")
@@ -112,10 +112,11 @@ if __name__ == '__main__':
     #          nprocs=8, join=True)
 
     model.fit(train_dataloader=train_dataloader,
-              evaluator=evaluator_dev, evaluation_steps=10,
               epochs=num_epochs,
               warmup_steps=warmup_steps,
               output_path=model_save_path, use_amp=True)
+
+    evaluator_dev(model)
 
     ##### Load model and eval on test set
     # model = DocumentCrossEncoder(model_save_path)
