@@ -147,9 +147,12 @@ def fichier_transformer_csv(original_csv, class_csv, query_csv, email_address, t
 
     # read file csv orginal
     df_original = pd.read_csv(original_csv, index_col=0)
-    # remove row that column of body_grobid contains null and NaN value
-    df_clean = df_original[df_original['body_grobid'].isnull() == False]
-    df_clean = df_original[df_original['body_grobid'].isna() == False]
+    # remove row that column of body_grobid and RESUM contains null and NaN value
+    df_body_grobid = df_original[df_original['body_grobid'].isnull() == False ]
+    df_body_grobid = df_original[df_original['body_grobid'].isna() == False ]
+    df_clean = df_body_grobid[df_body_grobid['RESUM'].isnull() == False]
+    df_clean = df_body_grobid[df_body_grobid['RESUM'].isna() == False]
+
     # filter column ACCES_AGRITROP and body_grobid
     df = df_clean[['ACCES_AGRITROP', 'body_grobid']]
     # dataset of all classes in agrovoc
