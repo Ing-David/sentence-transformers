@@ -8,4 +8,4 @@ from .readers import InputExample
 from .readers import InputExampleDocument
 from .cross_encoder.CrossEncoder import CrossEncoder
 from sentence_transformers.document_encoder.DocumentBiEncoder import DocumentBiEncoder
-
+from sentence_transformers.document_encoder.BiEncoder import BiEncoder
