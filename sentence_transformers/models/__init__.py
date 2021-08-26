@@ -12,3 +12,4 @@ from .WeightedLayerPooling import WeightedLayerPooling
 from .WordEmbeddings import WordEmbeddings
 from .WordWeights import WordWeights
 from .DocumentEmbeddingGRU import DocumentEmbeddingGRU
+from .DocumentPooling import DocumentPooling
