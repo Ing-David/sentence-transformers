@@ -10,7 +10,7 @@ from torch import nn, Tensor
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm, trange
-from sentence_transformers.losses.BaselineIndexingMultipleNegativesRankingLoss import BaselineIndexingMultipleNegativesRankingLoss
+from sentence_transformers.losses.IndexingMultipleNegativesRankingLoss import IndexingMultipleNegativesRankingLoss
 from sentence_transformers import DocumentTransformer, util
 from sentence_transformers.evaluation import SentenceEvaluator
 
@@ -265,7 +265,7 @@ class BiEncoder():
                                                            t_total=num_train_steps)
 
         if loss_fct is None:
-            loss_fct = BaselineIndexingMultipleNegativesRankingLoss(model=self.token_pooling_layer)
+            loss_fct = IndexingMultipleNegativesRankingLoss(model=self.token_pooling_layer)
 
         skip_scheduler = False
 
