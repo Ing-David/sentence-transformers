@@ -8,6 +8,7 @@ from .ContrastiveTensionLoss import *
 from .OnlineContrastiveLoss import *
 from .MegaBatchMarginLoss import *
 from .DenoisingAutoEncoderLoss import *
+from .IndexingMultipleNegativesRankingLoss import *
 
 # Triplet losses
 from .BatchHardTripletLoss import *
