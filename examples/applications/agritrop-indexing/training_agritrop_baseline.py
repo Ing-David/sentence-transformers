@@ -17,9 +17,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 
-from sentence_transformers import InputExampleDocument
+from sentence_transformers import InputExampleDocument, BiEncoder
 from sentence_transformers import LoggingHandler
-from sentence_transformers.document_encoder import BiEncoder
+
 from .eval_agritrop import create_evaluator
 
 def fit_model(i, model, train_dataloader,
