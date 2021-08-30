@@ -16,11 +16,11 @@ from torch._C._distributed_c10d import HashStore
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-
 from sentence_transformers import InputExampleDocument, BiEncoder
 from sentence_transformers import LoggingHandler
 
 from .eval_agritrop import create_evaluator
+
 
 def fit_model(i, model, train_dataloader,
               evaluator,
@@ -98,7 +98,8 @@ if __name__ == '__main__':
     evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cuda:0")
 
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
-    model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512, device="cuda:0")
+    model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512, device="cuda:0",
+                      freeze_transformer=False)
 
     # Configure the training
     warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
