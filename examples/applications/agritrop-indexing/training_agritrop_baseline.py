@@ -98,7 +98,7 @@ if __name__ == '__main__':
     evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cuda:0")
 
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
-    model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512, device="cuda:0",
+    model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=256, device="cuda:0",
                       freeze_transformer=False)
 
     # Configure the training
