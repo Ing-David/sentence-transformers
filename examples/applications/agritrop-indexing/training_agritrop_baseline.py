@@ -94,9 +94,6 @@ if __name__ == '__main__':
 
     # print(len(train_dataloader.dataset))
 
-    # We add an evaluator, which evaluates the performance during training
-    evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cpu")
-
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
     model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=256, device="cuda:0",
                       freeze_transformer=False)
@@ -118,6 +115,8 @@ if __name__ == '__main__':
               warmup_steps=warmup_steps,
               output_path=model_save_path, use_amp=True)
 
+    # We add an evaluator, which evaluates the performance during training
+    evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cpu")
     evaluator_dev(model)
     evaluator_test(model)
 
