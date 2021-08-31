@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     for group in tqdm(df_document_groups):
 
-        split_document_sentences = nltk.tokenize.sent_tokenize(group[1]['sentence1'].iloc[0])
+        split_document_sentences = nltk.tokenize.sent_tokenize(group[1]['abstract'].iloc[0])
         concept_labels = []
         labels = []
         for index, row in group[1].iterrows():
