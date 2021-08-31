@@ -348,7 +348,7 @@ class BiEncoder():
                 else:
 
                     loss_value = loss_fct([concept_label_embeddings, document_sentences], labels)
-                    loss_value.requires_grad = True
+                    # loss_value.requires_grad = True
                     loss_value.backward()
                     torch.nn.utils.clip_grad_norm_(self.token_pooling_layer.parameters(), max_grad_norm)
                     optimizer.step()
