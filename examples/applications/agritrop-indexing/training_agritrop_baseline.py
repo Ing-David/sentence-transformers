@@ -113,7 +113,7 @@ if __name__ == '__main__':
     model.fit(train_dataloader=train_dataloader,
               epochs=num_epochs,
               warmup_steps=warmup_steps,
-              output_path=model_save_path, use_amp=True)
+              output_path=model_save_path, use_amp=False)
 
     # We add an evaluator, which evaluates the performance during training
     evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cpu")
