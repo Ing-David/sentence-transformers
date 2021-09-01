@@ -1,3 +1,4 @@
+import argparse
 import logging
 import math
 from pathlib import Path
@@ -21,22 +22,6 @@ from sentence_transformers import LoggingHandler
 
 from .eval_agritrop import create_evaluator
 
-
-def fit_model(i, model, train_dataloader,
-              evaluator,
-              epochs,
-              warmup_steps,
-              output_path, use_amp):
-    open("ddp_temp", 'a').close()
-    open("ffp_temp_rpc", 'a').close()
-    dist_init(i, 2, "ddp_temp", "ffp_temp_rpc")
-    model.fit(train_dataloader=train_dataloader,
-              evaluator=evaluator,
-              epochs=epochs,
-              warmup_steps=warmup_steps,
-              output_path=output_path, use_amp=use_amp)
-
-
 # torch.distributed.init_process_group(backend="nccl",store=HashStore(), world_size=8, rank=0)
 
 #### Just some code to print debug information to stdout
@@ -50,13 +35,31 @@ os.putenv("TOKENIZERS_PARALLELISM", "true")
 logger = logging.getLogger(__name__)
 #### /print debug information to stdout
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Train / evaluate baseline indexing system on abstracts')
+
+    parser.add_argument('--dataset', '-d', type=str, nargs=1,
+                        help='Path to the TSV corpus to use', dest='dataset',
+                        default=['datasets/corpus_agritrop_transformers_abstract.tsv'])
+    parser.add_argument('--save-prefix', '-s', type=str, nargs=1,
+                        help='Prefix for the model save directory', dest='save_prefix',
+                        default=['output/training_agritrop_transformer_baseline-'])
+    parser.add_argument('--epochs', '-e', type=int, nargs=1, help="The number of epochs (for training)", dest='epochs',
+                        default=[100])
+
+    parser.add_argument('--load', '-l', type=str, nargs=1, help="Load model from directory", dest='load', default=[])
+
+    args = parser.parse_args()
+
     # dataset's path
-    agritrop_dataset_path = 'datasets/corpus_agritrop_transformers_abstract.tsv'
+    agritrop_dataset_path = args.dataset[0]
 
     # Define our Cross-Encoder
     train_batch_size = 1
-    num_epochs = 100
-    model_save_path = 'output/training_agritrop_transformer-' + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    num_epochs = args.epochs[0]
+
+    load = len(args.load) > 0
+    model_save_path = args.save_prefix[0] + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     # Read Agritrop's dataset
     logger.info("Read Agritrop's train dataset")
@@ -95,33 +98,33 @@ if __name__ == '__main__':
     # print(len(train_dataloader.dataset))
 
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
-    model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512, device="cuda:0",
-                      freeze_transformer=False)
+    if not load:
+        logger.info("Training model using 'squeezebert/squeezebert-uncased'...")
+        model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512, device="cuda:0",
+                          freeze_transformer=False)
+        # Configure the training
+        warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
+        logger.info("Warmup-steps: {}".format(warmup_steps))
+        # Train the model
+        # mp.spawn(fit_model, args=(model, train_dataloader,
+        #                           None,  # evaluator,
+        #                           4,  # epochs
+        #                           warmup_steps,
+        #                           model_save_path,
+        #                           True),  # use amp
+        #          nprocs=8, join=True)
 
-    # Configure the training
-    warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
-    logger.info("Warmup-steps: {}".format(warmup_steps))
-    # Train the model
-    # mp.spawn(fit_model, args=(model, train_dataloader,
-    #                           None,  # evaluator,
-    #                           4,  # epochs
-    #                           warmup_steps,
-    #                           model_save_path,
-    #                           True),  # use amp
-    #          nprocs=8, join=True)
+        model.fit(train_dataloader=train_dataloader,
+                  epochs=num_epochs,
+                  warmup_steps=warmup_steps,
+                  output_path=model_save_path, use_amp=False)
+    else:
+        load_path = args.load[0]
+        logger.info(f"Loading model from {load_path}")
+        model = BiEncoder(load_path, num_labels=1, max_length=512, device="cuda:0",
+                          freeze_transformer=False)
 
-    model.fit(train_dataloader=train_dataloader,
-              epochs=num_epochs,
-              warmup_steps=warmup_steps,
-              output_path=model_save_path, use_amp=False)
-
-    # We add an evaluator, which evaluates the performance during training
+    logger.info("Evaluating...")
     evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cuda:0")
     evaluator_dev(model)
     evaluator_test(model)
-
-    ##### Load model and eval on test set
-    # model = DocumentCrossEncoder(model_save_path)
-
-    # evaluator = CECorrelationEvaluator.from_input_examples(test_samples, name='agritrop-test')
-    # evaluator(model)
