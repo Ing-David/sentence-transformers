@@ -116,7 +116,7 @@ if __name__ == '__main__':
               output_path=model_save_path, use_amp=False)
 
     # We add an evaluator, which evaluates the performance during training
-    evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cpu")
+    evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cuda:0")
     evaluator_dev(model)
     evaluator_test(model)
 
