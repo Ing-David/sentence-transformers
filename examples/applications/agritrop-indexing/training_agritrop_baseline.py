@@ -47,7 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', '-e', type=int, nargs=1, help="The number of epochs (for training)", dest='epochs',
                         default=[100])
 
-    parser.add_argument('--load', '-l', type=str, nargs=1, help="Load model from directory", dest='load', default=[])
+    parser.add_argument('--eval', '-l', type=str, nargs=1, help="Load model from directory and evaluate", dest='eval', default=[])
 
     args = parser.parse_args()
 
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     train_batch_size = 1
     num_epochs = args.epochs[0]
 
-    load = len(args.load) > 0
+    load = len(args.eval) > 0
     model_save_path = args.save_prefix[0] + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     # Read Agritrop's dataset
@@ -118,13 +118,14 @@ if __name__ == '__main__':
                   epochs=num_epochs,
                   warmup_steps=warmup_steps,
                   output_path=model_save_path, use_amp=False)
+        model.save(model_save_path)
     else:
-        load_path = args.load[0]
+        load_path = args.eval[0]
         logger.info(f"Loading model from {load_path}")
         model = BiEncoder(load_path, num_labels=1, max_length=512, device="cuda:0",
                           freeze_transformer=False)
 
-    logger.info("Evaluating...")
-    evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cuda:0")
-    evaluator_dev(model)
-    evaluator_test(model)
+        logger.info("Evaluating...")
+        evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cuda:0")
+        evaluator_dev(model)
+        evaluator_test(model)
