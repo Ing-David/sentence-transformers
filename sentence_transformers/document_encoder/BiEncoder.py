@@ -66,7 +66,7 @@ class BiEncoder():
         self.document_pooling = DocumentPooling(self.embedding_size, 'mean')
 
         # Tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_args)
+        self.tokenizer = self.transformer_model.tokenizer
         self.max_length = max_length
 
         if device is None:
@@ -547,8 +547,7 @@ class BiEncoder():
             return
 
         logger.info("Save model to {}".format(path))
-        self.transformer_model.save_pretrained(path)
-        self.tokenizer.save_pretrained(path)
+        self.transformer_model.save(path)
 
     def save_pretrained(self, path):
         """
