@@ -20,7 +20,6 @@ import nltk
 
 logger = logging.getLogger(__name__)
 
-
 # import GPUtil
 from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 
@@ -548,7 +547,7 @@ class BiEncoder():
             return
 
         logger.info("Save model to {}".format(path))
-        self.model.save_pretrained(path)
+        self.transformer_model.save_pretrained(path)
         self.tokenizer.save_pretrained(path)
 
     def save_pretrained(self, path):
