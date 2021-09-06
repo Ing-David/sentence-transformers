@@ -47,7 +47,8 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', '-e', type=int, nargs=1, help="The number of epochs (for training)", dest='epochs',
                         default=[100])
 
-    parser.add_argument('--eval', '-l', type=str, nargs=1, help="Load model from directory and evaluate", dest='eval', default=[])
+    parser.add_argument('--eval', '-l', type=str, nargs=1, help="Load model from directory and evaluate", dest='eval',
+                        default=[])
 
     args = parser.parse_args()
 
@@ -126,6 +127,6 @@ if __name__ == '__main__':
                           freeze_transformer=False)
 
         logger.info("Evaluating...")
-        evaluator_dev, evaluator_test = create_evaluator(df_transformer, "cuda:0")
+        evaluator_dev, evaluator_test = create_evaluator(df_transformer, text_field="abstract", device="cpu")
         evaluator_dev(model)
         evaluator_test(model)

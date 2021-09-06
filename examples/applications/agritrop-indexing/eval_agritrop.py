@@ -13,7 +13,7 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
-def create_evaluator(dataframe, device, limit=-1):
+def create_evaluator(dataframe, device,text_field='sentence1', limit=-1):
     ### Load data
 
     queries_dev = {}
@@ -26,11 +26,11 @@ def create_evaluator(dataframe, device, limit=-1):
     # Load data
     for i in tqdm(range(0,len(dataframe))):
       if dataframe['split'][i] == 'dev':
-        queries_dev[dataframe['doc_ids'][i]] = dataframe['sentence1'][i]
+        queries_dev[dataframe['doc_ids'][i]] = dataframe[text_field][i]
         corpus_concept_ids_dev[dataframe['concept_ids'][i]] = dataframe['sentence2'][i]
 
       elif dataframe['split'][i] == 'test':
-        queries_test[dataframe['doc_ids'][i]] = dataframe['sentence1'][i]
+        queries_test[dataframe['doc_ids'][i]] = dataframe[text_field][i]
         corpus_concept_ids_test[dataframe['concept_ids'][i]] = dataframe['sentence2'][i]
 
     # relevant concept_ids for dev and test dataset
