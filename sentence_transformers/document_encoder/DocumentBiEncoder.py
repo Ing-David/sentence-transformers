@@ -52,7 +52,12 @@ class DocumentBiEncoder():
         #     self.config.num_labels = num_labels
 
         # Model RNN
+
         self.model_rnn = DocumentEmbeddingGRU(input_size=self.embedding_size)
+
+        if os.path.isdir(model_name):
+            self.model_rnn.load_state_dict(torch.load(model_name + "/rnn_model.pkl"))
+
         # Model BERT via Transformer
         self.transformer_model = Transformer(model_name)
 
@@ -63,7 +68,7 @@ class DocumentBiEncoder():
         self.token_pooling_layer = Pooling(self.embedding_size, 'mean')
 
         # Tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, **tokenizer_args)
+        self.tokenizer = self.transformer_model.tokenizer
         self.max_length = max_length
 
         if device is None:
@@ -547,10 +552,13 @@ class DocumentBiEncoder():
         """
         if path is None:
             return
+        else:
+            os.makedirs(path)
 
         logger.info("Save model to {}".format(path))
-        self.model.save_pretrained(path)
+        self.transformer_model.save_pretrained(path)
         self.tokenizer.save_pretrained(path)
+        torch.save(self.model_rnn.state_dict(), path + "/rnn_model.pkl")
 
     def save_pretrained(self, path):
         """
