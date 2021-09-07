@@ -12,7 +12,6 @@ import pandas as pd
 import transformers
 from torch import nn
 import torch.distributed
-from fairscale.utils.testing import dist_init
 from torch._C._distributed_c10d import HashStore
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -74,8 +73,7 @@ if __name__ == '__main__':
     df_document_groups = df_transformer.groupby("doc_ids")
 
     for group in tqdm(df_document_groups):
-
-        split_document_sentences = nltk.tokenize.sent_tokenize(group[1]['abstract'].iloc[0])
+        abstract = group[1]['abstract'].iloc[0]
         concept_labels = []
         labels = []
         for index, row in group[1].iterrows():
@@ -83,7 +81,7 @@ if __name__ == '__main__':
             concate_concept = " ".join(split_concept_labels)
             concept_labels.append([concate_concept])
             labels.append(int(row['score']))
-        input_example = InputExampleDocument(document_sentences=split_document_sentences, concept_labels=concept_labels,
+        input_example = InputExampleDocument(document_sentences=[abstract], concept_labels=concept_labels,
                                              labels=labels)
         split = group[1]['split'].iloc[0]
         if split == 'dev':

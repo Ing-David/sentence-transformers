@@ -1,4 +1,4 @@
-from fairscale.utils.testing import dist_init
+
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
 import numpy as np
 import logging
@@ -21,7 +21,6 @@ import nltk
 logger = logging.getLogger(__name__)
 
 # import GPUtil
-from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 
 
 class BiEncoder():
@@ -54,7 +53,6 @@ class BiEncoder():
 
         # Model BERT via Transformer
         self.transformer_model = Transformer(model_name)
-        self.document_pooling = DocumentPooling(self.embedding_size, 'mean')
 
         if freeze_transformer:
             for param in self.transformer_model.parameters():
@@ -63,7 +61,6 @@ class BiEncoder():
         # Token Pooling
         self.token_pooling_layer = Pooling(self.embedding_size, 'mean')
         # Sentence Pooling
-        self.document_pooling = DocumentPooling(self.embedding_size, 'mean')
 
         # Tokenizer
         self.tokenizer = self.transformer_model.tokenizer

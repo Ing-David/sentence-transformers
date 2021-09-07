@@ -1,4 +1,4 @@
-from fairscale.utils.testing import dist_init
+
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
 import numpy as np
 import logging
@@ -20,7 +20,7 @@ import nltk
 
 logger = logging.getLogger(__name__)
 # import GPUtil
-from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
+
 
 
 class DocumentBiEncoder():
