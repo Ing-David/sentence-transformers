@@ -19,7 +19,7 @@ from tqdm import tqdm
 from sentence_transformers import InputExampleDocument, BiEncoder
 from sentence_transformers import LoggingHandler
 
-from .eval_agritrop import create_evaluator
+from eval_agritrop import create_evaluator
 
 # torch.distributed.init_process_group(backend="nccl",store=HashStore(), world_size=8, rank=0)
 
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
     if not load:
         logger.info("Training model using 'squeezebert/squeezebert-uncased'...")
-        model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512, device="cuda:0",
+        model = BiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512, device="cuda:1",
                           freeze_transformer=False)
         # Configure the training
         warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     else:
         load_path = args.eval[0]
         logger.info(f"Loading model from {load_path}")
-        model = BiEncoder(load_path, num_labels=1, max_length=512, device="cuda:0",
+        model = BiEncoder(load_path, num_labels=1, max_length=512, device="cpu",
                           freeze_transformer=False)
 
         logger.info("Evaluating...")
