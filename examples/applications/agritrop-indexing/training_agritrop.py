@@ -53,7 +53,7 @@ if __name__ == '__main__':
                         help="Maximum length for the input token sequence for the transformer model", dest='eval',
                         default=[1512])
 
-    parser.add_argument('--device', '-d', type=str, nargs=1, help="Device to use", dest="device", default=['cuda:0'])
+    parser.add_argument('--device', '-dv', type=str, nargs=1, help="Device to use", dest="device", default=['cuda:0'])
 
     parser.add_argument('--freeze', '-f', type=bool, action="store_true", help="Freeze transformer", dest="freeze",
                         default=True)
