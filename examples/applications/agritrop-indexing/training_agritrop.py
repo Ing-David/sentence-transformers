@@ -50,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval', '-l', type=str, nargs=1, help="Load model from directory and evaluate", dest='eval',
                         default=[])
     parser.add_argument('--max_len', '-m', type=int, nargs=1,
-                        help="Maximum length for the input token sequence for the transformer model", dest='eval',
+                        help="Maximum length for the input token sequence for the transformer model", dest='max_len',
                         default=[1512])
 
     parser.add_argument('--device', '-dv', type=str, nargs=1, help="Device to use", dest="device", default=['cuda:0'])
