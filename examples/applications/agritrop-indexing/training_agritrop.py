@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--device', '-dv', type=str, nargs=1, help="Device to use", dest="device", default=['cuda:0'])
 
-    parser.add_argument('--freeze', '-f', type=bool, action="store_true", help="Freeze transformer", dest="freeze",
+    parser.add_argument('--freeze', '-f', action="store_true", help="Freeze transformer", dest="freeze",
                         default=True)
 
     args = parser.parse_args()
