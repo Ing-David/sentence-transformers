@@ -1,4 +1,3 @@
-
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
 import numpy as np
 import logging
@@ -19,8 +18,9 @@ from collections import defaultdict
 import nltk
 
 logger = logging.getLogger(__name__)
-# import GPUtil
 
+
+# import GPUtil
 
 
 class DocumentBiEncoder():
@@ -556,8 +556,7 @@ class DocumentBiEncoder():
             os.makedirs(path)
 
         logger.info("Save model to {}".format(path))
-        self.transformer_model.save_pretrained(path)
-        self.tokenizer.save_pretrained(path)
+        self.transformer_model.save(path)
         torch.save(self.model_rnn.state_dict(), path + "/rnn_model.pkl")
 
     def save_pretrained(self, path):
