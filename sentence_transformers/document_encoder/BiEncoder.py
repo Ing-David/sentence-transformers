@@ -1,24 +1,25 @@
-
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
-import numpy as np
 import logging
 import os
-from typing import Dict, Type, Callable, List, Iterable, Union
-import transformers
+from collections import defaultdict
+from typing import Dict, Type, Callable, List, Union
+
+import nltk
+import numpy as np
 import torch
+import transformers
 from torch import nn, Tensor
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm.autonotebook import tqdm, trange
-from sentence_transformers.losses.IndexingMultipleNegativesRankingLoss import IndexingMultipleNegativesRankingLoss
+from transformers import AutoConfig
+
 from sentence_transformers import DocumentTransformer, util
 from sentence_transformers.evaluation import SentenceEvaluator
-
-from sentence_transformers.models import Transformer, Pooling, DocumentPooling
-from collections import defaultdict
-import nltk
+from sentence_transformers.losses.IndexingMultipleNegativesRankingLoss import IndexingMultipleNegativesRankingLoss
+from sentence_transformers.models import Transformer, Pooling
 
 logger = logging.getLogger(__name__)
+
 
 # import GPUtil
 
@@ -126,6 +127,7 @@ class BiEncoder():
         document_attention_mask = []
 
         tokenized_concept_labels = []
+
         labels = []
         # iteration through each batch
         for document in batch:
@@ -137,23 +139,16 @@ class BiEncoder():
             document_token_type_ids.append(document_tokens['token_type_ids'])
             document_attention_mask.append(document_tokens['attention_mask'])
 
-            concept_input_ids = []
-            concept_token_type_ids = []
-            concept_attention_mask = []
-            # Tokenizing concept labels
             for current_concept_labels in document.concept_labels:
                 concept_label_tokens = self.tokenizer(current_concept_labels, padding=True, truncation='longest_first',
-                                                      max_length=self.max_length)
-                concept_input_ids.append(concept_label_tokens['input_ids'])
-                concept_token_type_ids.append(concept_label_tokens['token_type_ids'])
-                concept_attention_mask.append(concept_label_tokens['attention_mask'])
-
+                                                      max_length=self.max_length, is_split_into_words=False)
                 # Padding concept labels
                 tokenized_concept_labels.append({
-                    'input_ids': torch.tensor(self.pad(concept_input_ids, fill_value=0)).to(self._target_device),
-                    'token_type_ids': torch.tensor(self.pad(concept_token_type_ids, fill_value=0)).to(
+                    'input_ids': torch.tensor(self.pad(concept_label_tokens['input_ids'], fill_value=0)).to(
                         self._target_device),
-                    'attention_mask': torch.tensor(self.pad(concept_attention_mask, fill_value=0)).to(
+                    'token_type_ids': torch.tensor(self.pad(concept_label_tokens['token_type_ids'], fill_value=0)).to(
+                        self._target_device),
+                    'attention_mask': torch.tensor(self.pad(concept_label_tokens['attention_mask'], fill_value=0)).to(
                         self._target_device)
                 })
             # Score for each line
@@ -311,23 +306,24 @@ class BiEncoder():
 
                 document_sentences = self.token_pooling_layer(document_sentences)
 
+
                 for current_concept_labels in concept_labels:
                     # Concept's labels
-                    current_concept_labels['input_ids'] = current_concept_labels['input_ids'][0, :, :]
-                    current_concept_labels['token_type_ids'] = current_concept_labels['token_type_ids'][0, :, :]
-                    current_concept_labels['attention_mask'] = current_concept_labels['attention_mask'][0, :, :]
                     # BERT process via Transformer for concept's labels
                     current_concept_labels = self.transformer_model(current_concept_labels)
                     # Pooling procedure for concept's labels
                     current_concept_labels = self.token_pooling_layer(current_concept_labels)
-                    concept_label_embeddings.append(current_concept_labels['sentence_embedding'])
+                    concept_label_embeddings.append(current_concept_labels['sentence_embedding'].squeeze(0))
 
                 # Scores
                 labels = labels[0]
 
                 # Combine each document and concept's labels in the batch
                 document_sentences = document_sentences['sentence_embedding']
-                concept_label_embeddings = torch.cat(concept_label_embeddings, dim=0)
+                document_sentences = \
+                    document_sentences.expand(labels.shape[0], document_sentences.shape[1])
+
+                concept_label_embeddings = torch.vstack(concept_label_embeddings)
 
                 if use_amp:
                     with autocast():
@@ -406,7 +402,6 @@ class BiEncoder():
 
         self.transformer_model.to(device)
         self.token_pooling_layer.to(device)
-        self.document_pooling.to(device)
 
         # Sort documents depend on their length
         length_sorted_idx = np.argsort([-self._text_length(doc) for doc in documents])
@@ -426,35 +421,24 @@ class BiEncoder():
             # Loop through
             for i in range(len(documents_batch)):
                 # Convert document to list of sentences
-                list_sentences = nltk.tokenize.sent_tokenize(documents_batch[i])
-                document_tokens = self.tokenizer(list_sentences, padding=True, truncation='longest_first',
+                document_tokens = self.tokenizer(documents_batch[i], padding=True, truncation='longest_first',
                                                  max_length=self.max_length)
-                document_input_ids.append(document_tokens['input_ids'])
-                document_token_type_ids.append(document_tokens['token_type_ids'])
-                document_attention_mask.append(document_tokens['attention_mask'])
+                document_input_ids.append(torch.tensor(document_tokens['input_ids']))
+                document_token_type_ids.append(torch.tensor(document_tokens['token_type_ids']))
+                document_attention_mask.append(torch.tensor(document_tokens['attention_mask']))
             tokenized_document_sentences = {
                 'input_ids': torch.tensor(self.pad(document_input_ids, fill_value=0)).to(self._target_device),
                 'token_type_ids': torch.tensor(self.pad(document_token_type_ids, fill_value=0)).to(self._target_device),
                 'attention_mask': torch.tensor(self.pad(document_attention_mask, fill_value=0)).to(self._target_device)
             }
 
-            # embeddings' part
-            for i in tqdm(range(0, tokenized_document_sentences['input_ids'].shape[0]), desc="Each document in batch"):
-                # dictionary
-                document_sentences_batch = {}
-                # Document
-                document_sentences_batch['input_ids'] = tokenized_document_sentences['input_ids'][i, :, :]
-                document_sentences_batch['token_type_ids'] = tokenized_document_sentences['token_type_ids'][i, :, :]
-                document_sentences_batch['attention_mask'] = tokenized_document_sentences['attention_mask'][i, :, :]
-                # BERT process via Transformer for document
-                document_sentences_batch_output = self.transformer_model(document_sentences_batch)
-                # Pooling procedure for document to get sentence embeddings
-                output_pooling_document_sentences = self.token_pooling_layer(document_sentences_batch_output)[
-                    output_value].data
-                # Sentence pooling (1, num_sentence, emb_dim) -> (1, emb_dim)
-                output_sentence_pooling = self.document_pooling(output_pooling_document_sentences.unsqueeze(0))
 
-                embeddings.append(output_sentence_pooling)
+            document_sentences_batch_output = self.transformer_model(tokenized_document_sentences)
+            # Pooling procedure for document to get sentence embeddings
+            output_pooling_document_sentences = self.token_pooling_layer(document_sentences_batch_output)[
+                output_value].data
+
+            embeddings.append(output_pooling_document_sentences)
 
         all_embeddings = torch.cat(embeddings, dim=0)
 
