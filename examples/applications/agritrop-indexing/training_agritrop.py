@@ -49,6 +49,14 @@ if __name__ == '__main__':
 
     parser.add_argument('--eval', '-l', type=str, nargs=1, help="Load model from directory and evaluate", dest='eval',
                         default=[])
+    parser.add_argument('--max_len', '-m', type=int, nargs=1,
+                        help="Maximum length for the input token sequence for the transformer model", dest='eval',
+                        default=[1512])
+
+    parser.add_argument('--device', '-d', type=str, nargs=1, help="Device to use", dest="device", default=['cuda:0'])
+
+    parser.add_argument('--freeze', '-f', type=bool, action="store_true", help="Freeze transformer", dest="freeze",
+                        default=True)
 
     args = parser.parse_args()
 
@@ -61,6 +69,11 @@ if __name__ == '__main__':
 
     load = len(args.eval) > 0
     model_save_path = args.save_prefix[0] + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    device = args.device[0]
+
+    max_len = args.max_len[0]
+    freeze = args.freeze
 
     # Read Agritrop's dataset
     logger.info("Read Agritrop's train dataset")
@@ -101,8 +114,8 @@ if __name__ == '__main__':
     # We use bert-base-cased as base model and set num_labels=1, which predicts a continuous score between 0 and 1
     if not load:
         logger.info("Training model using 'squeezebert/squeezebert-uncased'...")
-        model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=512, device="cpu",
-                                  freeze_transformer=True)
+        model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=max_len, device=device,
+                                  freeze_transformer=freeze)
         # Configure the training
         warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
         logger.info("Warmup-steps: {}".format(warmup_steps))
@@ -123,10 +136,10 @@ if __name__ == '__main__':
     else:
         load_path = args.eval[0]
         logger.info(f"Loading model from {load_path}")
-        model = DocumentBiEncoder(load_path, num_labels=1, max_length=512, device="cuda:0",
-                          freeze_transformer=False)
+        model = DocumentBiEncoder(load_path, num_labels=1, max_length=max_len, device=device,
+                                  freeze_transformer=freeze)
 
         logger.info("Evaluating...")
-        evaluator_dev, evaluator_test = create_evaluator(df_transformer, text_field="abstract", device="cpu")
+        evaluator_dev, evaluator_test = create_evaluator(df_transformer, text_field="abstract", device=device)
         evaluator_dev(model)
         evaluator_test(model)
