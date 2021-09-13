@@ -59,7 +59,7 @@ if __name__ == '__main__':
                         default=True)
 
     parser.add_argument('--amp', '-a', action="store_true", help="Use mixed precision for training (GPU Only)",
-                        dest="freeze",
+                        dest="amp",
                         default=False)
 
     args = parser.parse_args()
