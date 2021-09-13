@@ -58,6 +58,10 @@ if __name__ == '__main__':
     parser.add_argument('--freeze', '-f', action="store_true", help="Freeze transformer", dest="freeze",
                         default=True)
 
+    parser.add_argument('--amp', '-a', action="store_true", help="Use mixed precision for training (GPU Only)",
+                        dest="freeze",
+                        default=False)
+
     args = parser.parse_args()
 
     # dataset's path
@@ -74,6 +78,7 @@ if __name__ == '__main__':
 
     max_len = args.max_len[0]
     freeze = args.freeze
+    amp = args.amp
 
     # Read Agritrop's dataset
     logger.info("Read Agritrop's train dataset")
@@ -131,7 +136,7 @@ if __name__ == '__main__':
         model.fit(train_dataloader=train_dataloader,
                   epochs=num_epochs,
                   warmup_steps=warmup_steps,
-                  output_path=model_save_path, use_amp=True)
+                  output_path=model_save_path, use_amp=amp)
         model.save(model_save_path)
     else:
         load_path = args.eval[0]
