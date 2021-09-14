@@ -132,7 +132,7 @@ if __name__ == '__main__':
         #                           model_save_path,
         #                           True),  # use amp
         #          nprocs=8, join=True)
-        model.save(model_save_path)
+        # model.save(model_save_path)
         model.fit(train_dataloader=train_dataloader,
                   epochs=num_epochs,
                   warmup_steps=warmup_steps,
