@@ -120,7 +120,7 @@ if __name__ == '__main__':
     if not load:
         logger.info("Training model using 'squeezebert/squeezebert-uncased'...")
         model = DocumentBiEncoder('squeezebert/squeezebert-uncased', num_labels=1, max_length=max_len, device=device,
-                                  freeze_transformer=freeze, dropout=0.3, layers=1)
+                                  freeze_transformer=freeze, dropout=0.3, layers=2)
         # Configure the training
         warmup_steps = math.ceil(len(train_dataloader) * num_epochs * 0.1)  # 10% of train data for warm-up
         logger.info("Warmup-steps: {}".format(warmup_steps))
