@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig
 import numpy as np
 import logging
@@ -244,8 +246,8 @@ class DocumentBiEncoder():
         self.transformer_model.to(self._target_device)
         self.token_pooling_layer.to(self._target_device)
 
-        if output_path is not None:
-            os.makedirs(output_path, exist_ok=True)
+        # if output_path is not None:
+        #     os.makedirs(output_path, exist_ok=True)
 
         self.best_score = -9999999
         num_train_steps = int(len(train_dataloader) * epochs)
@@ -551,11 +553,6 @@ class DocumentBiEncoder():
         """
         Saves all model and tokenizer to path
         """
-        if path is None:
-            return
-        else:
-            os.makedirs(path)
-
         logger.info("Save model to {}".format(path))
         self.transformer_model.save(path)
         torch.save(self.model_rnn.state_dict(), path + "/rnn_model.pkl")
