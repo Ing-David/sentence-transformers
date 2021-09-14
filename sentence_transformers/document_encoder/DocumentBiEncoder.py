@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class DocumentBiEncoder():
     def __init__(self, model_name: str, num_labels: int = None, max_length: int = None, device: str = None,
                  tokenizer_args: Dict = {},
-                 default_activation_function=None, freeze_transformer=True, embedding_size=768):
+                 default_activation_function=None, freeze_transformer=True, embedding_size=768, dropout=0.3, layers=2):
         """
         A CrossEncoder takes exactly two sentences / texts as input and either predicts
         a score or label for this sentence pair. It can for example predict the similarity of the sentence pair
@@ -53,7 +53,8 @@ class DocumentBiEncoder():
 
         # Model RNN
 
-        self.model_rnn = DocumentEmbeddingGRU(input_size=self.embedding_size)
+        self.model_rnn = DocumentEmbeddingGRU(input_size=self.embedding_size, num_layers=layers, dropout=dropout
+                                              )
 
         if os.path.isdir(model_name):
             self.model_rnn.load_state_dict(torch.load(model_name + "/rnn_model.pkl"))
