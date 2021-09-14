@@ -22,8 +22,8 @@ class DocumentEmbeddingGRU(nn.Module):
         # BiGRU
         # x = x.squeeze()
         gru_out, hid = self.BiGRU(x)
-        h2 = hid[2, :, :]
-        h3 = hid[3, :, :]
+        h2 = hid[2 * self.num_layers - 2, :, :]
+        h3 = hid[2 * self.num_layers - 1, :, :]
         h = torch.cat((h2, h3), dim=1)
         # attention's elements
         query = x.transpose(-2, -3)
